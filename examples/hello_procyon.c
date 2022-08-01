@@ -1,8 +1,10 @@
-#include "procyon.h"
+#include "procyon/procyon.h"
 
-int main(int argc, char *argv[])
+#include <stdio.h>
+
+int main()
 {
-    HelloProcyon();
+    printf("Hello, Procyon!\n");
 
     return 0;
 }

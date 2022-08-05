@@ -1,10 +1,17 @@
 #include "procyon/procyon.h"
 
-#include <stdio.h>
-
 int main()
 {
-    printf("Hello, Procyon!\n");
+    pcInitWindow(640, 480, "Hello, Procyon!");
+
+    while(!pcWindowShouldClose())
+    {
+        pcBeginFrame();
+
+        pcEndFrame();
+    }
+
+    pcCloseWindow();
 
     return 0;
 }

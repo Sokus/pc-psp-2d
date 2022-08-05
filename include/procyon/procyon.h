@@ -38,6 +38,12 @@ typedef enum LogLevel
 extern "C" {
 #endif
 
+void pcInitWindow(int width, int height, const char *title);
+void pcCloseWindow();
+void pcBeginFrame();
+void pcEndFrame();
+bool pcWindowShouldClose();
+
 void pcSetLogLevel(int log_level);
 void pcLog(int log_level, const char *text, ...);
 

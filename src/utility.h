@@ -1,5 +1,5 @@
-#ifndef PROCYON_LOG_H
-#define PROCYON_LOG_H
+#ifndef PROCYON_UTILITY_H
+#define PROCYON_UTILITY_H
 
 #include "config.h"
 
@@ -15,4 +15,6 @@
     #define PC_LOG_DEBUG(...) (void)0
 #endif
 
-#endif // PROCYON_LOG_H
+
+
+#endif // PROCYON_UTILITY_H

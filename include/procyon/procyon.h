@@ -9,6 +9,18 @@
 #define NULL ((void *)0)
 #endif
 
+#ifndef PC_MALLOC
+#define PC_MALLOC(size) malloc(size)
+#endif
+
+#ifndef PC_FREE
+#define PC_FREE(ptr) free(ptr)
+#endif
+
+#ifndef PC_REALLOC
+#define PC_REALLOC(ptr, size) realloc(ptr, size)
+#endif
+
 #include <stdint.h>
 
 typedef enum LogLevel
@@ -28,6 +40,11 @@ extern "C" {
 
 void pcSetLogLevel(int log_level);
 void pcLog(int log_level, const char *text, ...);
+
+unsigned char *pcLoadFileData(const char *file_name, unsigned int *bytes_read);
+void pcUnloadFileData(unsigned char *data);
+char *pcLoadFileText(const char *file_name);
+void pcUnloadFileText(char *text);
 
 void pcConcatenateStrings(const char *str_a, size_t str_a_size,
                           const char *str_b, size_t str_b_size,

@@ -114,83 +114,10 @@ static papp_t papp = {0};
     #endif
 #endif
 
-// WIN32
 static void papp_win32_fatal_error(const char* message)
 {
     MessageBoxA(NULL, message, "Error", MB_ICONEXCLAMATION);
     ExitProcess(0);
-}
-
-static LRESULT CALLBACK papp_win32_window_proc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam)
-{
-    switch(msg)
-    {
-        case WM_CLOSE:
-        case WM_DESTROY:
-            papp.should_quit = true;
-            return 0;
-        default:
-            return DefWindowProcW(wnd, msg, wparam, lparam);
-    }
-}
-
-static void papp_win32_process_incoming_messages()
-{
-    MSG msg;
-    while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
-    {
-        switch(msg.message)
-        {
-            case WM_QUIT:
-                papp.should_quit = true;
-                break;
-            default:
-                TranslateMessage(&msg);
-                DispatchMessageA(&msg);
-                break;
-        }
-    }
-}
-
-static papp_win32_create_window()
-{
-    HINSTANCE hinstance = GetModuleHandleA(NULL);
-
-    WNDCLASSEXW wc = {0};
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = papp_win32_window_proc;
-    wc.hInstance = hinstance;
-    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.lpszClassName = L"procyon_app_window_class";
-
-    ATOM atom = RegisterClassExW(&wc);
-    PROCYON_MSG_ASSERT(atom, "Failed to register window class");
-
-    int width = CW_USEDEFAULT;
-    int height = CW_USEDEFAULT;
-    // WS_EX_NOREDIRECTIONBITMAP flag here is needed to fix ugly bug with Windows 10
-    // when window is resized and DXGI swap chain uses FLIP presentation model
-    // DO NOT use it if you choose to use non-FLIP presentation model
-    DWORD exstyle = WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP;
-    DWORD style = WS_OVERLAPPEDWINDOW;
-
-    // uncomment in case you want fixed size window
-    // style &= ~WS_THICKFRAME & ~WS_MAXIMIZEBOX;
-    // RECT rect = { 0, 0, 1280, 720 };
-    // AdjustWindowRectEx(&rect, style, FALSE, exstyle);
-    // width = rect.right - rect.left;
-    // height = rect.bottom - rect.top;
-
-    HWND window_handle = CreateWindowExW(
-        exstyle, wc.lpszClassName, L"Nie patrz mi sie na tytul", style,
-        CW_USEDEFAULT, CW_USEDEFAULT, width, height,
-        NULL, NULL, wc.hInstance, NULL);
-    PROCYON_MSG_ASSERT(window_handle, "Failed to create window");
-
-    papp.win32.wnd = window_handle;
-    papp.width = width;
-    papp.height = height;
 }
 
 ULONG papp_D3D11InfoQueue_Release(ID3D11InfoQueue * This)
@@ -553,6 +480,33 @@ void papp_D3D11DeviceContext_OMSetDepthStencilState(ID3D11DeviceContext *This, I
 #endif
 }
 
+HRESULT papp_D3D11DeviceContext_Map(ID3D11DeviceContext * This, ID3D11Resource *pResource, UINT Subresource, D3D11_MAP MapType, UINT MapFlags, D3D11_MAPPED_SUBRESOURCE *pMappedResource)
+{
+#ifdef __cplusplus
+    return This->Map(This, pResource, Subresource, MapType, MapFlags, pMappedResource);
+#else
+    return This->lpVtbl->Map(This, pResource, Subresource, MapType, MapFlags, pMappedResource);
+#endif
+}
+
+void papp_D3D11DeviceContext_Unmap(ID3D11DeviceContext * This, ID3D11Resource *pResource, UINT Subresource)
+{
+#ifdef __cplusplus
+    This->Unmap(This, pResource, Subresource);
+#else
+    This->lpVtbl->Unmap(This, pResource, Subresource);
+#endif
+}
+
+void papp_D3D11DeviceContext_Draw(ID3D11DeviceContext * This, UINT VertexCount, UINT StartVertexLocation)
+{
+#ifdef __cplusplus
+    return This->Draw(VertexCount, StartVertexLocation);
+#else
+    This->lpVtbl->Draw(This, VertexCount, StartVertexLocation);
+#endif
+}
+
 void papp_D3D11DeviceContext_DrawIndexed(ID3D11DeviceContext * This, UINT IndexCount, UINT StartIndexLocation, INT BaseVertexLocation)
 {
 #ifdef __cplusplus
@@ -577,15 +531,6 @@ void papp_D3D11DeviceContext_OMSetRenderTargets(ID3D11DeviceContext * This, UINT
     return This->OMSetRenderTargets(NumViews, ppRenderTargetViews, pDepthStencilView);
 #else
     This->lpVtbl->OMSetRenderTargets(This, NumViews, ppRenderTargetViews, pDepthStencilView);
-#endif
-}
-
-void papp_D3D11DeviceContext_Draw(ID3D11DeviceContext * This, UINT VertexCount, UINT StartVertexLocation)
-{
-#ifdef __cplusplus
-    return This->Draw(VertexCount, StartVertexLocation);
-#else
-    This->lpVtbl->Draw(This, VertexCount, StartVertexLocation);
 #endif
 }
 
@@ -793,13 +738,6 @@ void papp_d3d11_init()
     }
 }
 
-void papp_win32_init()
-{
-    papp_win32_create_window();
-    papp_d3d11_init();
-    ShowWindow(papp.win32.wnd, SW_SHOWDEFAULT);
-}
-
 void papp_d3d11_prepare_frame()
 {
     RECT rect;
@@ -857,7 +795,6 @@ void papp_d3d11_prepare_frame()
         papp.d3d11.viewport.MinDepth = 0;
         papp.d3d11.viewport.MaxDepth = 1;
     }
-
 }
 
 void papp_d3d11_clear(float r, float g, float b, float a)
@@ -865,32 +802,6 @@ void papp_d3d11_clear(float r, float g, float b, float a)
     FLOAT color[] = { r, g, b, a };
     papp_D3D11DeviceContext_ClearRenderTargetView(papp.d3d11.devcon, papp.d3d11.render_target_view, color);
     papp_D3D11DeviceContext_ClearDepthStencilView(papp.d3d11.devcon, papp.d3d11.depth_stencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
-}
-
-void papp_render_stuff()
-{
-    papp_D3D11DeviceContext_IASetInputLayout(papp.d3d11.devcon, papp.d3d11.layout);
-    papp_D3D11DeviceContext_IASetPrimitiveTopology(papp.d3d11.devcon, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    UINT stride = sizeof(papp_d3d11_vertex_t);
-    UINT offset = 0;
-    papp_D3D11DeviceContext_IASetVertexBuffers(papp.d3d11.devcon, 0, 1, &papp.d3d11.vbuffer, &stride, &offset);
-    papp_D3D11DeviceContext_IASetIndexBuffer(papp.d3d11.devcon, papp.d3d11.ibuffer, DXGI_FORMAT_R16_UINT, 0);
-
-    papp_D3D11DeviceContext_VSSetShader(papp.d3d11.devcon, papp.d3d11.vshader, NULL, 0);
-
-    papp_D3D11DeviceContext_RSSetViewports(papp.d3d11.devcon, 1, &papp.d3d11.viewport);
-    papp_D3D11DeviceContext_RSSetState(papp.d3d11.devcon, papp.d3d11.rasterizer_state);
-
-    papp_D3D11DeviceContext_PSSetSamplers(papp.d3d11.devcon, 0, 1, &papp.d3d11.sampler);
-    papp_D3D11DeviceContext_PSSetShaderResources(papp.d3d11.devcon, 0, 1, &papp.d3d11.texture_view);
-    papp_D3D11DeviceContext_PSSetShader(papp.d3d11.devcon, papp.d3d11.pshader, NULL, 0);
-
-    papp_D3D11DeviceContext_OMSetBlendState(papp.d3d11.devcon, papp.d3d11.blend_state, NULL, ~0U);
-    papp_D3D11DeviceContext_OMSetDepthStencilState(papp.d3d11.devcon, papp.d3d11.depth_stencil_state, 0);
-    papp_D3D11DeviceContext_OMSetRenderTargets(papp.d3d11.devcon, 1, &papp.d3d11.render_target_view, papp.d3d11.depth_stencil_view);
-
-    // ID3D11DeviceContext_Draw(papp.d3d11.context, 3, 0);
-    papp_D3D11DeviceContext_DrawIndexed(papp.d3d11.devcon, 6, 0, 0);
 }
 
 void papp_d3d11_flip()
@@ -909,4 +820,84 @@ void papp_d3d11_flip()
 
     papp_d3d11_prepare_frame();
 }
+
+static void papp_win32_process_incoming_messages()
+{
+    MSG msg;
+    while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
+    {
+        switch(msg.message)
+        {
+            case WM_QUIT:
+                papp.should_quit = true;
+                break;
+            default:
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+                break;
+        }
+    }
+}
+
+static LRESULT CALLBACK papp_win32_window_proc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    switch(msg)
+    {
+        case WM_CLOSE:
+        case WM_DESTROY:
+            papp.should_quit = true;
+            return 0;
+        default:
+            return DefWindowProcW(wnd, msg, wparam, lparam);
+    }
+}
+
+static papp_win32_create_window()
+{
+    HINSTANCE hinstance = GetModuleHandleA(NULL);
+
+    WNDCLASSEXW wc = {0};
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = papp_win32_window_proc;
+    wc.hInstance = hinstance;
+    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.lpszClassName = L"procyon_app_window_class";
+
+    ATOM atom = RegisterClassExW(&wc);
+    PROCYON_MSG_ASSERT(atom, "Failed to register window class");
+
+    int width = CW_USEDEFAULT;
+    int height = CW_USEDEFAULT;
+    // WS_EX_NOREDIRECTIONBITMAP flag here is needed to fix ugly bug with Windows 10
+    // when window is resized and DXGI swap chain uses FLIP presentation model
+    // DO NOT use it if you choose to use non-FLIP presentation model
+    DWORD exstyle = WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP;
+    DWORD style = WS_OVERLAPPEDWINDOW;
+
+    // uncomment in case you want fixed size window
+    // style &= ~WS_THICKFRAME & ~WS_MAXIMIZEBOX;
+    // RECT rect = { 0, 0, 1280, 720 };
+    // AdjustWindowRectEx(&rect, style, FALSE, exstyle);
+    // width = rect.right - rect.left;
+    // height = rect.bottom - rect.top;
+
+    HWND window_handle = CreateWindowExW(
+        exstyle, wc.lpszClassName, L"Nie patrz mi sie na tytul", style,
+        CW_USEDEFAULT, CW_USEDEFAULT, width, height,
+        NULL, NULL, wc.hInstance, NULL);
+    PROCYON_MSG_ASSERT(window_handle, "Failed to create window");
+
+    papp.win32.wnd = window_handle;
+    papp.width = width;
+    papp.height = height;
+}
+
+void papp_win32_init()
+{
+    papp_win32_create_window();
+    papp_d3d11_init();
+    ShowWindow(papp.win32.wnd, SW_SHOWDEFAULT);
+}
+
 #endif // PROCYON_APP_IMPL

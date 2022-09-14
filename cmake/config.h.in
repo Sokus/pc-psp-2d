@@ -1,0 +1,11 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define PROCYON_VERSION "${procyon_VERSION_MAJOR}.${procyon_VERSION_MINOR}.${procyon_VERSION_PATCH}"
+
+#cmakedefine PLATFORM_DESKTOP
+
+#cmakedefine ENABLE_LOG
+#cmakedefine ENABLE_DEBUG
+
+#endif // CONFIG_H

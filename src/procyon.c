@@ -1,5 +1,4 @@
 #include "procyon.h"
-#include "config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,19 +10,11 @@
     #include "glad/glad.h"
 #endif // PLATFORM_DESKTOP
 
-#include "utility.h"
-
-#define PC_UNUSED(arg) (void)(arg)
-
-#define MAX_KEYBOARD_KEYS 512
-
 typedef struct CoreData
 {
     struct Window
     {
-#ifdef PLATFORM_DESKTOP
         GLFWwindow *handle;
-#endif
         const char *title;
         bool ready;
         bool should_close;
@@ -31,29 +22,16 @@ typedef struct CoreData
         int width;
         int height;
     } window;
-
-    struct Input
-    {
-        struct Keyboard
-        {
-            int exit_key;
-            char current_key_state[MAX_KEYBOARD_KEYS];
-            char previous_key_state[MAX_KEYBOARD_KEYS];
-        } keyboard;
-    } input;
 } CoreData;
-
 CoreData core = {0};
 
 static void pcErrorCallback(int error, const char *description)
 {
-    PC_UNUSED(error);
-    PC_LOG(LOG_ERROR, "GLFW: %s", description);
+    fprintf(stderr, "GLFW: %s\n", description);
 }
 
 static void pcKeyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
-    PC_UNUSED(scancode); PC_UNUSED(mods);
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -62,7 +40,6 @@ static void pcKeyCallback(GLFWwindow *window, int key, int scancode, int action,
 
 static void pcFramebufferSizeCallback(GLFWwindow *window, int width, int height)
 {
-    PC_UNUSED(window);
     core.window.width = width;
     core.window.height = height;
 }
@@ -72,10 +49,7 @@ static bool pcInitGraphicsDevice(int width, int height)
     glfwSetErrorCallback(pcErrorCallback);
 
     if(!glfwInit())
-    {
-        PC_LOG(LOG_FATAL, "GLFW: Failed to initialize GLFW");
         return false;
-    }
 
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -88,7 +62,6 @@ static bool pcInitGraphicsDevice(int width, int height)
     if(!core.window.handle)
     {
         glfwTerminate();
-        PC_LOG(LOG_FATAL, "GLFW: Could not create window");
         return false;
     }
 
@@ -118,11 +91,11 @@ void pcCloseWindow()
     glfwDestroyWindow(core.window.handle);
     core.window.ready = false;
     glfwTerminate();
-    PC_LOG(LOG_INFO, "Window closed successfully");
 }
 
 void pcBeginFrame()
 {
+    glfwPollEvents();
     glViewport(0, 0, core.window.width, core.window.height);
     glClearColor(0.1f, 0.3f, 0.4f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -131,7 +104,6 @@ void pcBeginFrame()
 void pcEndFrame()
 {
     glfwSwapBuffers(core.window.handle);
-    glfwPollEvents();
 }
 
 bool pcWindowShouldClose()

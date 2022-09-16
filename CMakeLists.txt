@@ -1,37 +1,12 @@
 cmake_minimum_required (VERSION 3.5)
-project(procyon VERSION 0.1.0)
-
-add_subdirectory(lib)
+project(procyon)
 
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(BUILD_SAMPLES "Build samples" ON)
 
-add_library(procyon src/procyon.c)
+add_subdirectory(external)
+add_subdirectory(src)
 
-if(WIN32)
-    target_link_libraries(procyon
-        glad
-        glfw
-    )
+if(BUILD_SAMPLES)
+    add_subdirectory(samples)
 endif()
-
-target_link_libraries(procyon
-    cglm
-)
-
-target_include_directories(procyon
-    PUBLIC
-	    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/procyon
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_BINARY_DIR}
-)
-
-add_executable(test src/test.c)
-target_link_libraries(test PRIVATE procyon)
-
-# if (MSVC)
-#     target_compile_options(procyon PUBLIC /W4 -D _CRT_SECURE_NO_WARNINGS)
-# else()
-#     target_compile_options(procyon PUBLIC -Wall -Wextra -pedantic)
-# endif()

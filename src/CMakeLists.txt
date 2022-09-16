@@ -1,0 +1,20 @@
+add_library(procyon procyon.c)
+
+if(WIN32)
+    target_link_libraries(procyon
+        glad
+        glfw
+        stb::image
+    )
+endif()
+
+target_include_directories(procyon
+    PUBLIC
+	    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# if (MSVC)
+#     target_compile_options(procyon PUBLIC /W4 -D _CRT_SECURE_NO_WARNINGS)
+# else()
+#     target_compile_options(procyon PUBLIC -Wall -Wextra -pedantic)
+# endif()

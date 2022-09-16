@@ -1,0 +1,5 @@
+if(WIN32)
+    add_subdirectory(desktop)
+elseif(PSP)
+    add_subdirectory(psp)
+endif()

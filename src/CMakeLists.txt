@@ -1,4 +1,7 @@
-add_library(procyon procyon.c)
+add_library(procyon
+    procyon.c
+    procyon_gfx.c
+    procyon_texture.c)
 
 if(WIN32)
     target_link_libraries(procyon

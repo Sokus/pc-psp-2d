@@ -85,37 +85,33 @@ void papp_init(int width, int height, const char *title)
     papp.height = height;
     papp.title = title;
 
-    if(!papp_glfw_init())
-        fprintf(stderr, "Could not init GLFW\n");
+    papp_glfw_init();
 
     pgfx_init();
+    pgfx_update_viewport(papp.width, papp.height);
 }
 
 void papp_terminate()
 {
+    pgfx_terminate();
     glfwDestroyWindow(papp.window.handle);
     glfwTerminate();
 }
 
-void papp_main()
+bool papp_should_close()
 {
-    papp_init(960, 480, "Nie patrz mi sie na tytul");
+    return glfwWindowShouldClose(papp.window.handle);
+}
 
-    papp_texture texture = papp_load_texture("red.png");
+void papp_clear(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+{
+    pgfx_clear(r, g, b, a);
+}
 
-    while (!glfwWindowShouldClose(papp.window.handle))
-    {
-        pgfx_update_viewport(papp.width, papp.height);
-        pgfx_clear(46, 34, 47, 255);
-
-        papp_color tint = { 255, 255, 255, 255 };
-        papp_draw_texture(texture, 16.0f, 16.0f, 16.0f, tint);
-
-        pgfx_render_batch();
-
-        glfwSwapBuffers(papp.window.handle);
-        glfwPollEvents();
-    }
-
-    glfwTerminate();
+void papp_flip()
+{
+    pgfx_render_batch();
+    glfwSwapBuffers(papp.window.handle);
+    glfwPollEvents();
+    pgfx_update_viewport(papp.width, papp.height);
 }

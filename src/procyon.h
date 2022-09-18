@@ -50,7 +50,11 @@ typedef struct papp_mat4
 extern "C" {
 #endif
 
-void papp_main();
+void papp_init(int width, int height, const char *title);
+void papp_terminate();
+bool papp_should_close();
+void papp_clear(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+void papp_flip();
 
 papp_texture papp_load_texture(const char *path);
 void papp_draw_texture(papp_texture texture, float x, float y, float scale, papp_color tint);

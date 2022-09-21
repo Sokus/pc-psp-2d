@@ -1,10 +1,14 @@
-add_executable(app_psp main.c)
+add_executable(psp_app main.c)
+target_link_libraries(psp_app
+    PUBLIC
+        pspdebug pspdisplay pspge pspgu pspgum
+        stb::image
+)
 
-target_link_libraries(app_psp PUBLIC pspgum pspgu pspge psputility pspdisplay pspctrl pspnet pspnet_apctl psppower pspdebug)
 create_pbp_file(
-    TARGET ${PROJECT_NAME}
+    TARGET psp_app
     ICON_PATH NULL
-    BACKGROUND_PATH NULL
     PREVIEW_PATH NULL
-    TITLE ${PROJECT_NAME}
+    TITLE "Procyon App"
+    BUILD_PRX
 )

@@ -41,23 +41,24 @@ papp_texture papp_load_texture(const char *path)
     }
 }
 
-void papp_draw_texture(papp_texture texture, float x, float y, float scale, papp_color tint)
+void papp_draw_texture(papp_texture texture, float x, float y, float scale)
 {
-    pgfx_use_texture(texture.id);
-    pgfx_batch_color(tint.r, tint.g, tint.b, tint.a);
-
     float left = x;
     float right = x + (float)texture.width * scale;
-    float bottom = y;
-    float top = y + (float)texture.height * scale;
+    float bottom = y + (float)texture.height * scale;
+    float top = y;
 
-    pgfx_begin_drawing(PAPP_DRAWMODE_TRIANGLE);
-        pgfx_batch_texcoord(1.0f, 0.0f); pgfx_batch_vec2(   top, right);
-        pgfx_batch_texcoord(1.0f, 1.0f); pgfx_batch_vec2(   top,  left);
-        pgfx_batch_texcoord(0.0f, 1.0f); pgfx_batch_vec2(bottom,  left);
+    pgfx_use_texture(texture.id);
+    pgfx_begin_drawing(PGFX_DRAWFLAG_TRIANGLES | PGFX_DRAWFLAG_INDEXED);
+    pgfx_reserve(4, 6);
+        pgfx_batch_color(255, 255, 255, 255);
 
-        pgfx_batch_texcoord(1.0f, 0.0f); pgfx_batch_vec2(   top, right);
-        pgfx_batch_texcoord(0.0f, 1.0f); pgfx_batch_vec2(bottom,  left);
-        pgfx_batch_texcoord(0.0f, 0.0f); pgfx_batch_vec2(bottom, right);
+        pgfx_batch_texcoord(1.0f, 1.0f); pgfx_batch_vec2(right, top);
+        pgfx_batch_texcoord(0.0f, 1.0f); pgfx_batch_vec2(left, top);
+        pgfx_batch_texcoord(0.0f, 0.0f); pgfx_batch_vec2(left, bottom);
+        pgfx_batch_texcoord(1.0f, 0.0f); pgfx_batch_vec2(right, bottom);
+
+        pgfx_batch_index(0); pgfx_batch_index(1); pgfx_batch_index(2);
+        pgfx_batch_index(0); pgfx_batch_index(2); pgfx_batch_index(3);
     pgfx_end_drawing();
 }

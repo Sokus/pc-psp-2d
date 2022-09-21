@@ -57,7 +57,7 @@ void papp_clear(unsigned char r, unsigned char g, unsigned char b, unsigned char
 void papp_flip();
 
 papp_texture papp_load_texture(const char *path);
-void papp_draw_texture(papp_texture texture, float x, float y, float scale, papp_color tint);
+void papp_draw_texture(papp_texture texture, float x, float y, float scale);
 
 #ifdef __cplusplus
 } // extern "C" {

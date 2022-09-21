@@ -18,16 +18,18 @@ typedef struct pgfx_vertex
 
 typedef struct pgfx_draw_call
 {
-    pgfx_draw_mode mode;
+    pgfx_draw_flags flags;
     int vertex_start;
     int vertex_count;
+    int index_start;
+    int index_count;
     GLuint texture_id;
 } pgfx_draw_call;
 
 typedef struct pgfx_batch
 {
     GLuint shader;
-    GLuint vertex_buffer, vertex_array;
+    GLuint vertex_buffer, vertex_array, element_buffer;
 
     float current_z;
     papp_color color;
@@ -35,6 +37,9 @@ typedef struct pgfx_batch
 
     pgfx_vertex vertices[1024];
     int vertex_count;
+
+    unsigned short indices[1024];
+    int index_count;
 
     pgfx_draw_call draws[32];
     int draw_count;
@@ -161,11 +166,15 @@ bool pgfx_init()
 
     glGenVertexArrays(1, &batch.vertex_array);
     glGenBuffers(1, &batch.vertex_buffer);
+    glGenBuffers(1, &batch.element_buffer);
 
     glBindVertexArray(batch.vertex_array);
 
     glBindBuffer(GL_ARRAY_BUFFER, batch.vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(batch.vertices), 0, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(batch.vertices), NULL, GL_DYNAMIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch.element_buffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batch.indices), NULL, GL_DYNAMIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(pgfx_vertex), (void*)offsetof(pgfx_vertex, pos));
     glEnableVertexAttribArray(0);
@@ -203,40 +212,48 @@ void pgfx_render_batch()
     {
         glBindVertexArray(batch.vertex_array);
 
-        float *mapped_buffer = (float *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-        memcpy(mapped_buffer, batch.vertices, batch.vertex_count * sizeof(pgfx_vertex));
+        float *vertex_buffer = (float *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+        memcpy(vertex_buffer, batch.vertices, batch.vertex_count * sizeof(pgfx_vertex));
         glUnmapBuffer(GL_ARRAY_BUFFER);
+
+        float *index_buffer = (float *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
+        memcpy(index_buffer, batch.indices, batch.index_count * sizeof(unsigned short));
+        glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
 
         glUseProgram(batch.shader);
 
         for(int draw_idx = 0; draw_idx < batch.draw_count; ++draw_idx)
         {
             pgfx_draw_call *draw_call = batch.draws + draw_idx;
-            GLenum mode = 0;
-            switch(draw_call->mode)
-            {
-                case PAPP_DRAWMODE_TRIANGLE: mode = GL_TRIANGLES; break;
-                case PAPP_DRAWMODE_LINE: mode = GL_LINE; break;
-                default: continue;
-            }
+            GLenum mode;
+            if(draw_call->flags & PGFX_DRAWFLAG_TRIANGLES) mode = GL_TRIANGLES;
+            else if(draw_call->flags & PGFX_DRAWFLAG_LINE) mode = GL_LINE;
+            else continue;
+
             glBindTexture(GL_TEXTURE_2D, draw_call->texture_id);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-            glDrawArrays(mode, draw_call->vertex_start, draw_call->vertex_count);
+            if(draw_call->flags & PGFX_DRAWFLAG_INDEXED)
+                glDrawElements(mode, draw_call->index_count, GL_UNSIGNED_SHORT, (void *)(draw_call->index_start * sizeof(GLushort)));
+            else
+                glDrawArrays(mode, draw_call->vertex_start, draw_call->vertex_count);
         }
 
         glBindVertexArray(0);
     }
 
     batch.draw_count = 1;
-    batch.draws[0].vertex_count = 0;
     batch.vertex_count = 0;
+    batch.index_count = 0;
+    batch.draws[0].vertex_count = 0;
+    batch.draws[0].index_count = 0;
 }
 
 void pgfx_begin_drawing(int mode)
 {
     pgfx_draw_call *last_draw_call = &batch.draws[batch.draw_count - 1];
-    if(last_draw_call->mode != mode)
+    if(last_draw_call->flags != mode)
     {
+        GLuint current_texture_id = last_draw_call->texture_id;
+
         if(last_draw_call->vertex_count > 0)
             batch.draw_count++;
 
@@ -244,9 +261,10 @@ void pgfx_begin_drawing(int mode)
             pgfx_render_batch();
 
         last_draw_call = &batch.draws[batch.draw_count - 1];
-        last_draw_call->mode = mode;
+        last_draw_call->flags = mode;
         last_draw_call->vertex_count = 0;
-        last_draw_call->texture_id = 0; // TODO: set to some common default
+        last_draw_call->index_count = 0;
+        last_draw_call->texture_id = current_texture_id;
     }
 }
 
@@ -260,6 +278,8 @@ void pgfx_use_texture(GLuint texture_id)
     pgfx_draw_call *last_draw_call = &batch.draws[batch.draw_count - 1];
     if(texture_id != 0 && texture_id != last_draw_call->texture_id)
     {
+        pgfx_draw_flags current_flags = last_draw_call->flags;
+
         if(last_draw_call->vertex_count > 0)
             batch.draw_count++;
 
@@ -267,55 +287,46 @@ void pgfx_use_texture(GLuint texture_id)
             pgfx_render_batch();
 
         last_draw_call = &batch.draws[batch.draw_count - 1];
+        last_draw_call->flags = current_flags;
         last_draw_call->vertex_count = 0;
+        last_draw_call->index_count = 0;
         last_draw_call->texture_id = texture_id;
     }
 }
 
-bool pgfx_would_overflow(int vertex_count)
+void pgfx_reserve(int vertex_count, int index_count)
 {
-    bool overflow = false;
+    pgfx_draw_call *last_draw_call = &batch.draws[batch.draw_count - 1];
 
-    if(batch.vertex_count + vertex_count >= P_ARRAY_COUNT(batch.vertices))
+    if(batch.vertex_count + vertex_count >= P_ARRAY_COUNT(batch.vertices) ||
+       batch.index_count + index_count >= P_ARRAY_COUNT(batch.indices))
     {
-        overflow = true;
-
-        pgfx_draw_call *last_draw_call = &batch.draws[batch.draw_count - 1];
-        pgfx_draw_mode current_mode = last_draw_call->mode;
+        pgfx_draw_flags current_flags = last_draw_call->flags;
         GLuint current_texture_id = last_draw_call->texture_id;
 
         pgfx_render_batch();
         last_draw_call = &batch.draws[batch.draw_count - 1];
-        last_draw_call->mode = current_mode;
+        last_draw_call->flags = current_flags;
         last_draw_call->texture_id = current_texture_id;
     }
 
-    return overflow;
+    if(vertex_count > 0 && last_draw_call->vertex_count == 0)
+        last_draw_call->vertex_start = batch.vertex_count;
+
+    if(index_count > 0 && last_draw_call->index_count == 0)
+        last_draw_call->index_start = batch.index_count;
 }
 
 void pgfx_batch_vec3(float x, float y, float z)
 {
-    pgfx_draw_call *last_draw_call = &batch.draws[batch.draw_count - 1];
-    int primitive_vertex_count = 0;
-    switch(last_draw_call->mode)
-    {
-        case PAPP_DRAWMODE_TRIANGLE: primitive_vertex_count = 3; break;
-        case PAPP_DRAWMODE_LINE:     primitive_vertex_count = 2; break;
-        default:                                                 return;
-    }
-
-    if(last_draw_call->vertex_count % primitive_vertex_count == 0)
-        pgfx_would_overflow(primitive_vertex_count);
-    last_draw_call = &batch.draws[batch.draw_count - 1];
-
     batch.vertices[batch.vertex_count].pos.x = x;
     batch.vertices[batch.vertex_count].pos.y = y;
     batch.vertices[batch.vertex_count].pos.z = z;
     batch.vertices[batch.vertex_count].color = batch.color;
     batch.vertices[batch.vertex_count].texcoord =  batch.texcoord;
-
-    last_draw_call->vertex_count++;
     batch.vertex_count++;
+
+    batch.draws[batch.draw_count - 1].vertex_count++;
 }
 
 void pgfx_batch_vec2(float x, float y)
@@ -335,6 +346,13 @@ void pgfx_batch_texcoord(float u, float v)
 {
     batch.texcoord.x = u;
     batch.texcoord.y = v;
+}
+
+void pgfx_batch_index(unsigned short index)
+{
+    batch.indices[batch.index_count] = index;
+    batch.index_count++;
+    batch.draws[batch.draw_count - 1].index_count++;
 }
 
 void pgfx_clear(unsigned char r, unsigned char g, unsigned char b, unsigned char a)

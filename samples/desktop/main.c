@@ -10,8 +10,7 @@ int main()
     {
         papp_clear(46, 34, 47, 255);
 
-        papp_color tint = { 255, 255, 255, 255 };
-        papp_draw_texture(texture, 16.0f, 16.0f, 16.0f, tint);
+        papp_draw_texture(texture, 16.0f, 16.0f, 16.0f);
 
         papp_flip();
     }

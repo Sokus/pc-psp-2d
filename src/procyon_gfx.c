@@ -19,7 +19,7 @@ typedef struct pgfx_vertex
 typedef struct pgfx_draw_call
 {
     pgfx_draw_flags flags;
-    int vertex_start;
+    int vertex_data_offset;
     int vertex_count;
     int index_start;
     int index_count;
@@ -31,11 +31,12 @@ typedef struct pgfx_batch
     GLuint shader;
     GLuint vertex_buffer, vertex_array, element_buffer;
 
+    int vertex_mark;
     papp_color color;
     papp_vec2 texcoord;
 
-    pgfx_vertex vertices[1024];
-    int vertex_count;
+    unsigned char vertex_data[1024];
+    int vertex_data_used;
 
     unsigned short indices[1024];
     int index_count;
@@ -129,36 +130,36 @@ bool pgfx_init()
     // shader program
     {
         const char *vertex_shader =
-            "#version 420 core                              \n"
-            "layout (location = 0) in vec2 aPos;            \n"
-            "layout (location = 1) in vec4 aColor;          \n"
-            "layout (location = 2) in vec2 aTexCoord;       \n"
-            "                                               \n"
-            "out vec4 ourColor;                             \n"
-            "out vec2 TexCoord;                             \n"
-            "                                               \n"
-            "uniform mat4 projection;                       \n"
-            "                                               \n"
-            "void main()                                    \n"
-            "{                                              \n"
-            "    gl_Position = projection * vec4(aPos, 0.0, 1.0);\n"
-            "    ourColor = aColor;                         \n"
-            "    TexCoord = vec2(aTexCoord.x, aTexCoord.y); \n"
+            "#version 420 core                                    \n"
+            "layout (location = 0) in vec2 aPos;                  \n"
+            "layout (location = 1) in vec4 aColor;                \n"
+            "layout (location = 2) in vec2 aTexCoord;             \n"
+            "                                                     \n"
+            "out vec4 ourColor;                                   \n"
+            "out vec2 TexCoord;                                   \n"
+            "                                                     \n"
+            "uniform mat4 projection;                             \n"
+            "                                                     \n"
+            "void main()                                          \n"
+            "{                                                    \n"
+            "    gl_Position = projection * vec4(aPos, 0.0, 1.0); \n"
+            "    ourColor = aColor;                               \n"
+            "    TexCoord = vec2(aTexCoord.x, aTexCoord.y);       \n"
             "}";
 
         const char *fragment_shader =
-            "#version 420 core                              \n"
-            "out vec4 FragColor;                            \n"
-            "                                               \n"
-            "in vec4 ourColor;                              \n"
-            "in vec2 TexCoord;                              \n"
-            "                                               \n"
-            "uniform sampler2D texture1;                    \n"
-            "                                               \n"
-            "void main()                                    \n"
-            "{                                              \n"
-            "   vec4 texel = texture(texture1, TexCoord);   \n"
-            "	FragColor = texel * (ourColor / 255.0);     \n"
+            "#version 420 core                                    \n"
+            "out vec4 FragColor;                                  \n"
+            "                                                     \n"
+            "in vec4 ourColor;                                    \n"
+            "in vec2 TexCoord;                                    \n"
+            "                                                     \n"
+            "uniform sampler2D texture1;                          \n"
+            "                                                     \n"
+            "void main()                                          \n"
+            "{                                                    \n"
+            "   vec4 texel = texture(texture1, TexCoord);         \n"
+            "	FragColor = texel * (ourColor / 255.0);           \n"
             "}";
         batch.shader = pgfx_create_program(vertex_shader, fragment_shader);
     }
@@ -170,7 +171,7 @@ bool pgfx_init()
     glBindVertexArray(batch.vertex_array);
 
     glBindBuffer(GL_ARRAY_BUFFER, batch.vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(batch.vertices), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(batch.vertex_data), NULL, GL_DYNAMIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch.element_buffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batch.indices), NULL, GL_DYNAMIC_DRAW);
@@ -190,8 +191,8 @@ bool pgfx_init()
     glBindVertexArray(0);
 
     batch.draw_count = 1;
+    batch.vertex_data_used = 0;
     batch.draws[0].vertex_count = 0;
-    batch.vertex_count = 0;
 
     return true;
 }
@@ -204,12 +205,12 @@ void pgfx_terminate()
 
 void pgfx_render_batch()
 {
-    if(batch.vertex_count > 0)
+    if(batch.vertex_data_used > 0)
     {
         glBindVertexArray(batch.vertex_array);
 
         float *vertex_buffer = (float *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-        memcpy(vertex_buffer, batch.vertices, batch.vertex_count * sizeof(pgfx_vertex));
+        memcpy(vertex_buffer, batch.vertex_data, batch.vertex_data_used);
         glUnmapBuffer(GL_ARRAY_BUFFER);
 
         float *index_buffer = (float *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
@@ -228,16 +229,24 @@ void pgfx_render_batch()
 
             glBindTexture(GL_TEXTURE_2D, draw_call->texture_id);
             if(draw_call->flags & PGFX_DRAWFLAG_INDEXED)
-                glDrawElements(mode, draw_call->index_count, GL_UNSIGNED_SHORT, (void *)(draw_call->index_start * sizeof(GLushort)));
+            {
+                void *index_offset = (void *)(draw_call->index_start * sizeof(GLushort));
+                glDrawElements(mode, draw_call->index_count, GL_UNSIGNED_SHORT, index_offset);
+            }
             else
-                glDrawArrays(mode, draw_call->vertex_start, draw_call->vertex_count);
+            {
+                // WARNING: Assumes that we are only using one type of vertex
+                //          or that all types are of the same size.
+                int vertex_start = draw_call->vertex_data_offset / sizeof(pgfx_vertex);
+                glDrawArrays(mode, vertex_start, draw_call->vertex_count);
+            }
         }
 
         glBindVertexArray(0);
     }
 
     batch.draw_count = 1;
-    batch.vertex_count = 0;
+    batch.vertex_data_used = 0;
     batch.index_count = 0;
     batch.draws[0].vertex_count = 0;
     batch.draws[0].index_count = 0;
@@ -290,11 +299,11 @@ void pgfx_use_texture(GLuint texture_id)
     }
 }
 
-void pgfx_reserve(int vertex_count, int index_count)
+void pgfx_reserve(int vertex_data_size, int index_count)
 {
     pgfx_draw_call *last_draw_call = &batch.draws[batch.draw_count - 1];
 
-    if(batch.vertex_count + vertex_count >= P_ARRAY_COUNT(batch.vertices) ||
+    if(batch.vertex_data_used + vertex_data_size >= P_ARRAY_COUNT(batch.vertex_data) ||
        batch.index_count + index_count >= P_ARRAY_COUNT(batch.indices))
     {
         pgfx_draw_flags current_flags = last_draw_call->flags;
@@ -306,8 +315,12 @@ void pgfx_reserve(int vertex_count, int index_count)
         last_draw_call->texture_id = current_texture_id;
     }
 
-    if(vertex_count > 0 && last_draw_call->vertex_count == 0)
-        last_draw_call->vertex_start = batch.vertex_count;
+    // WARNING: Assumes that we are only using one type of vertex
+    //          or that all types are of the same size.
+    batch.vertex_mark = batch.vertex_data_used / sizeof(pgfx_vertex);
+
+    if(vertex_data_size > 0 && last_draw_call->vertex_count == 0)
+        last_draw_call->vertex_data_offset = batch.vertex_data_used;
 
     if(index_count > 0 && last_draw_call->index_count == 0)
         last_draw_call->index_start = batch.index_count;
@@ -315,11 +328,12 @@ void pgfx_reserve(int vertex_count, int index_count)
 
 void pgfx_batch_vec2(float x, float y)
 {
-    batch.vertices[batch.vertex_count].pos.x = x;
-    batch.vertices[batch.vertex_count].pos.y = y;
-    batch.vertices[batch.vertex_count].color = batch.color;
-    batch.vertices[batch.vertex_count].texcoord =  batch.texcoord;
-    batch.vertex_count++;
+    pgfx_vertex *vertex = (pgfx_vertex *)(batch.vertex_data + batch.vertex_data_used);
+    vertex->pos.x = x;
+    vertex->pos.y = y;
+    vertex->color = batch.color;
+    vertex->texcoord = batch.texcoord;
+    batch.vertex_data_used += sizeof(pgfx_vertex);
 
     batch.draws[batch.draw_count - 1].vertex_count++;
 }
@@ -340,7 +354,7 @@ void pgfx_batch_texcoord(float u, float v)
 
 void pgfx_batch_index(unsigned short index)
 {
-    batch.indices[batch.index_count] = index;
+    batch.indices[batch.index_count] = batch.vertex_mark + index;
     batch.index_count++;
     batch.draws[batch.draw_count - 1].index_count++;
 }

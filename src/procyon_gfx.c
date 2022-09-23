@@ -11,7 +11,7 @@
 
 typedef struct pgfx_vertex
 {
-    papp_vec3 pos;
+    papp_vec2 pos;
     papp_color color;
     papp_vec2 texcoord;
 } pgfx_vertex;
@@ -31,7 +31,6 @@ typedef struct pgfx_batch
     GLuint shader;
     GLuint vertex_buffer, vertex_array, element_buffer;
 
-    float current_z;
     papp_color color;
     papp_vec2 texcoord;
 
@@ -131,7 +130,7 @@ bool pgfx_init()
     {
         const char *vertex_shader =
             "#version 420 core                              \n"
-            "layout (location = 0) in vec3 aPos;            \n"
+            "layout (location = 0) in vec2 aPos;            \n"
             "layout (location = 1) in vec4 aColor;          \n"
             "layout (location = 2) in vec2 aTexCoord;       \n"
             "                                               \n"
@@ -142,7 +141,7 @@ bool pgfx_init()
             "                                               \n"
             "void main()                                    \n"
             "{                                              \n"
-            "    gl_Position = projection * vec4(aPos, 1.0);\n"
+            "    gl_Position = projection * vec4(aPos, 0.0, 1.0);\n"
             "    ourColor = aColor;                         \n"
             "    TexCoord = vec2(aTexCoord.x, aTexCoord.y); \n"
             "}";
@@ -176,7 +175,7 @@ bool pgfx_init()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch.element_buffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batch.indices), NULL, GL_DYNAMIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(pgfx_vertex), (void*)offsetof(pgfx_vertex, pos));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(pgfx_vertex), (void*)offsetof(pgfx_vertex, pos));
     glEnableVertexAttribArray(0);
 
     glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(pgfx_vertex), (void*)offsetof(pgfx_vertex, color));
@@ -187,9 +186,6 @@ bool pgfx_init()
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
 
     glBindVertexArray(0);
 
@@ -270,7 +266,7 @@ void pgfx_begin_drawing(int mode)
 
 void pgfx_end_drawing()
 {
-    batch.current_z += 0.000005f;
+
 }
 
 void pgfx_use_texture(GLuint texture_id)
@@ -317,21 +313,15 @@ void pgfx_reserve(int vertex_count, int index_count)
         last_draw_call->index_start = batch.index_count;
 }
 
-void pgfx_batch_vec3(float x, float y, float z)
+void pgfx_batch_vec2(float x, float y)
 {
     batch.vertices[batch.vertex_count].pos.x = x;
     batch.vertices[batch.vertex_count].pos.y = y;
-    batch.vertices[batch.vertex_count].pos.z = z;
     batch.vertices[batch.vertex_count].color = batch.color;
     batch.vertices[batch.vertex_count].texcoord =  batch.texcoord;
     batch.vertex_count++;
 
     batch.draws[batch.draw_count - 1].vertex_count++;
-}
-
-void pgfx_batch_vec2(float x, float y)
-{
-    pgfx_batch_vec3(x, y, batch.current_z);
 }
 
 void pgfx_batch_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
@@ -358,6 +348,5 @@ void pgfx_batch_index(unsigned short index)
 void pgfx_clear(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
     glClearColor((float)r/255.0f, (float)g/255.0f, (float)b/255.0f, (float)a/255.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    batch.current_z = -1.0f;
+    glClear(GL_COLOR_BUFFER_BIT);
 }

@@ -10,7 +10,7 @@ int main()
     {
         papp_clear(46, 34, 47, 255);
 
-        papp_draw_texture(texture, 16.0f, 16.0f, 1.0f);
+        papp_draw_texture(texture, 16.0f, 16.0f, 16.0f);
 
         papp_flip();
     }

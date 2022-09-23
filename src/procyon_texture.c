@@ -1,18 +1,23 @@
 #include "procyon.h"
 #include "procyon_gfx.h"
 
-#ifdef PAPP_DESKTOP
+#ifdef PROCYON_DESKTOP
     #include "glad/glad.h"
 #endif
 
-#define STB_IMAGE_IMPLEMENTATION
+#ifdef PROCYON_PSP
+
+#endif
+
 #include "stb_image.h"
+
+#include <string.h>
 
 papp_texture papp_load_texture(const char *path)
 {
     stbi_set_flip_vertically_on_load(1);
-    int width, height, channels;
-    unsigned char *data = stbi_load(path, &width, &height, &channels, 0);
+    int width, height;
+    unsigned char *data = stbi_load(path, &width, &height, 0, 4);
     if(data)
     {
         GLuint texture_id;
@@ -25,11 +30,10 @@ papp_texture papp_load_texture(const char *path)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
         stbi_image_free(data);
 
-        papp_texture texture;
+        papp_texture texture = {0};
         texture.id = texture_id;
         texture.width = width;
         texture.height = height;
-        texture.channels = channels;
         return texture;
     }
     else
@@ -49,6 +53,7 @@ void papp_draw_texture(papp_texture texture, float x, float y, float scale)
     float top = y;
 
     pgfx_use_texture(texture.id);
+
     pgfx_begin_drawing(PGFX_DRAWFLAG_TRIANGLES | PGFX_DRAWFLAG_INDEXED);
     pgfx_reserve(4, 6);
         pgfx_batch_color(255, 255, 255, 255);

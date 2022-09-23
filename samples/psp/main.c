@@ -11,8 +11,8 @@
 #include <malloc.h>
 
 #define PSP_BUF_WIDTH 512
-#define PSP_SCR_WIDTH 480
-#define PSP_SCR_HEIGHT 272
+#define PSP_SCR_W 480
+#define PSP_SCR_H 272
 
 PSP_MODULE_INFO("Procyon App", 0, 1, 1);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -83,20 +83,20 @@ void* pgfx_get_static_vram_texture(unsigned int width, unsigned int height, unsi
 }
 
 void pgfx_init() {
-    void* fbp0 = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_HEIGHT, GU_PSM_8888);
-	void* fbp1 = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_HEIGHT, GU_PSM_8888);
-	void* zbp = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_HEIGHT, GU_PSM_4444);
+    void* fbp0 = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_H, GU_PSM_8888);
+	void* fbp1 = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_H, GU_PSM_8888);
+	void* zbp = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_H, GU_PSM_4444);
 
 	sceGuInit();
 
 	sceGuStart(GU_DIRECT, list);
 	sceGuDrawBuffer(GU_PSM_8888, fbp0, PSP_BUF_WIDTH);
-	sceGuDispBuffer(PSP_SCR_WIDTH, PSP_SCR_HEIGHT, fbp1, PSP_BUF_WIDTH);
+	sceGuDispBuffer(PSP_SCR_W, PSP_SCR_H, fbp1, PSP_BUF_WIDTH);
 	sceGuDepthBuffer(zbp, PSP_BUF_WIDTH);
-	sceGuOffset(2048 - (PSP_SCR_WIDTH/2), 2048 - (PSP_SCR_HEIGHT/2));
-	sceGuViewport(2048, 2048, PSP_SCR_WIDTH, PSP_SCR_HEIGHT);
+	sceGuOffset(2048 - (PSP_SCR_W/2), 2048 - (PSP_SCR_H/2));
+	sceGuViewport(2048, 2048, PSP_SCR_W, PSP_SCR_H);
 	sceGuDepthRange(65535, 0);
-	sceGuScissor(0, 0, PSP_SCR_WIDTH, PSP_SCR_HEIGHT);
+	sceGuScissor(0, 0, PSP_SCR_W, PSP_SCR_H);
 	sceGuEnable(GU_SCISSOR_TEST);
 	sceGuDepthFunc(GU_GEQUAL);
 	sceGuEnable(GU_DEPTH_TEST);
@@ -130,14 +130,14 @@ void pgfx_terminate()
     sceGuTerm();
 }
 
-struct pgfx_pc_vertex
+struct pgfx_psp_vertex
 {
     float u, v;
 	unsigned int color;
 	float x, y, z;
 };
 
-struct pgfx_pc_vertex __attribute__((aligned(16))) square_indexed[4] = {
+struct pgfx_psp_vertex __attribute__((aligned(16))) square_indexed[4] = {
     {0.0f, 0.0f, 0xFFFFFFFF,  0.0f, 16.0f, -1.0f},
     {0.0f, 1.0f, 0xFFFFFFFF,  0.0f,  0.0f, -1.0f},
     {1.0f, 1.0f, 0xFFFFFFFF, 16.0f,  0.0f, -1.0f},
@@ -265,7 +265,7 @@ int main()
 
     sceGumMatrixMode(GU_PROJECTION);
     sceGumLoadIdentity();
-    sceGumOrtho(0, PSP_SCR_WIDTH, PSP_SCR_HEIGHT, 0, -10.0f, 10.0f);
+    sceGumOrtho(0, PSP_SCR_W, PSP_SCR_H, 0, -10.0f, 10.0f);
 
     sceGumMatrixMode(GU_VIEW);
     sceGumLoadIdentity();

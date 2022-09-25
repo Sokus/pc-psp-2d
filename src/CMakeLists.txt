@@ -9,9 +9,13 @@ if(WIN32)
     target_link_libraries(procyon
         glad
         glfw
-        stb::image
     )
 endif()
+
+target_link_libraries(procyon
+    stb::image
+)
+
 
 target_include_directories(procyon
     PUBLIC

@@ -1,6 +1,8 @@
 #ifndef PROCYON_GFX_H
 #define PROCYON_GFX_H
 
+#include "procyon.h"
+
 #ifdef PROCYON_DESKTOP
     #include "glad/glad.h"
 #endif
@@ -25,10 +27,12 @@ void pgfx_begin_drawing(int flags);
 void pgfx_end_drawing();
 void pgfx_reserve(int vertex_count, int index_count);
 void pgfx_render_batch();
-void pgfx_use_texture(GLuint texture_id);
+void pgfx_use_texture(papp_texture *texture);
 void pgfx_batch_vec2(float x, float y);
 void pgfx_batch_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 void pgfx_batch_texcoord(float u, float v);
 void pgfx_batch_index(unsigned short index);
+
+void *pgfx_psp_push_static_vram_texture(unsigned int width, unsigned int height, unsigned int pixel_format);
 
 #endif // PROCYON_GFX_H

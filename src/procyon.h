@@ -22,6 +22,15 @@
 #include <stdbool.h>
 #endif
 
+typedef enum papp_direction
+{
+    PAPP_DIRECTION_UP,
+    PAPP_DIRECTION_LEFT,
+    PAPP_DIRECTION_DOWN,
+    PAPP_DIRECTION_RIGHT,
+    PAPP_DIRECTION_COUNT
+} papp_direction;
+
 typedef struct papp_rect
 {
     float x, y;
@@ -38,9 +47,10 @@ typedef struct papp_vec3
     float x, y, z;
 } papp_vec3;
 
-typedef struct papp_color
+typedef union papp_color
 {
-    unsigned char r, g, b, a;
+    struct { unsigned char r, g, b, a; };
+    unsigned int rgba;
 } papp_color;
 
 typedef struct papp_texture {
@@ -75,6 +85,8 @@ void papp_start_frame();
 void papp_end_frame();
 void papp_set_clear_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 void papp_clear();
+
+bool papp_key_down(papp_direction direction);
 
 papp_texture papp_load_texture(const char *path);
 void papp_draw_texture(papp_texture texture, float x, float y, float scale);

@@ -9,6 +9,8 @@
 
 #ifdef PROCYON_PSP
     #include <pspkernel.h>
+    #include <pspctrl.h>
+
     PSP_MODULE_INFO("Procyon", 0, 1, 1);
     PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
 
@@ -32,6 +34,7 @@ typedef struct papp_state
     const char *title;
     bool should_close;
     int width, height;
+    bool keys[PAPP_DIRECTION_COUNT];
 
     #ifdef PROCYON_DESKTOP
         papp_glfw_state glfw;
@@ -51,6 +54,18 @@ static void papp_glfw_key_callback(GLFWwindow *window, int key, int scancode, in
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+
+    if(action == GLFW_PRESS || action == GLFW_RELEASE)
+    {
+        switch(key)
+        {
+            case GLFW_KEY_W: papp.keys[PAPP_DIRECTION_UP] = (action == GLFW_PRESS); break;
+            case GLFW_KEY_A: papp.keys[PAPP_DIRECTION_LEFT] = (action == GLFW_PRESS); break;
+            case GLFW_KEY_S: papp.keys[PAPP_DIRECTION_DOWN] = (action == GLFW_PRESS); break;
+            case GLFW_KEY_D: papp.keys[PAPP_DIRECTION_RIGHT] = (action == GLFW_PRESS); break;
+            default: break;
+        }
     }
 }
 
@@ -113,6 +128,12 @@ static bool papp_desktop_should_close()
     return papp.should_close;
 }
 
+static void papp_desktop_start_frame()
+{
+    pgfx_update_viewport(papp.width, papp.height);
+    pgfx_start_frame();
+}
+
 static void papp_desktop_end_frame()
 {
     pgfx_end_frame();
@@ -151,6 +172,9 @@ static bool papp_psp_init()
     if(papp_psp_setup_callbacks() < 0)
         return false;
 
+    sceCtrlSetSamplingCycle(0);
+    sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
+
     pgfx_init();
 }
 
@@ -158,6 +182,28 @@ static void papp_psp_terminate()
 {
     pgfx_terminate();
     sceKernelExitGame();
+}
+
+static bool papp_psp_should_close()
+{
+    return papp.should_close;
+}
+
+static void papp_psp_start_frame()
+{
+    SceCtrlData ctrl_data;
+    sceCtrlReadBufferPositive(&ctrl_data, 1);
+    papp.keys[PAPP_DIRECTION_UP] = ctrl_data.Buttons & PSP_CTRL_UP;
+    papp.keys[PAPP_DIRECTION_LEFT] = ctrl_data.Buttons & PSP_CTRL_LEFT;
+    papp.keys[PAPP_DIRECTION_DOWN] = ctrl_data.Buttons & PSP_CTRL_DOWN;
+    papp.keys[PAPP_DIRECTION_RIGHT] = ctrl_data.Buttons & PSP_CTRL_RIGHT;
+
+    pgfx_start_frame();
+}
+
+static void papp_psp_end_frame()
+{
+    pgfx_end_frame();
 }
 
 #endif // PROCYON_PSP
@@ -184,18 +230,26 @@ bool papp_should_close()
 {
     #if defined(PROCYON_DESKTOP)
         return papp_desktop_should_close();
+    #elif defined(PROCYON_PSP)
+        return papp_psp_should_close();
     #endif
 }
 
 void papp_start_frame()
 {
-    pgfx_update_viewport(papp.width, papp.height);
+    #if defined(PROCYON_DESKTOP)
+        papp_desktop_start_frame();
+    #elif defined(PROCYON_PSP)
+        papp_psp_start_frame();
+    #endif
 }
 
 void papp_end_frame()
 {
     #if defined(PROCYON_DESKTOP)
         papp_desktop_end_frame();
+    #elif defined(PROCYON_PSP)
+        papp_psp_end_frame();
     #endif
 }
 
@@ -207,4 +261,9 @@ void papp_set_clear_color(unsigned char r, unsigned char g, unsigned char b, uns
 void papp_clear()
 {
     pgfx_clear();
+}
+
+bool papp_key_down(papp_direction direction)
+{
+    return papp.keys[direction];
 }

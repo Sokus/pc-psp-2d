@@ -1,7 +1,8 @@
 add_executable(psp_app main.c)
 target_link_libraries(psp_app
-    PUBLIC
-        pspdebug pspdisplay pspge pspgu pspgum
+    PRIVATE
+        procyon
+        pspdebug pspdisplay pspge pspgu pspgum pspctrl
         stb::image
 )
 

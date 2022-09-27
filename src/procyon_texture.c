@@ -105,7 +105,7 @@ static void papp_psp_copy_texture_data(void *dest, const void *src, const int pW
 
 static papp_texture papp_psp_load_texture(const char *path)
 {
-    stbi_set_flip_vertically_on_load(1);
+    stbi_set_flip_vertically_on_load(0);
     papp_texture texture = {0};
     int width, height;
     unsigned char *data = stbi_load(path, &width, &height, 0, 4);
@@ -165,37 +165,23 @@ papp_texture papp_load_texture(const char *path)
     #endif
 }
 
-typedef struct pgfx_psp_vertex
-{
-    float u, v;
-    unsigned int color;
-    float x, y, z;
-} pgfx_psp_vertex;
-
-#if defined(PROCYON_PSP)
-static pgfx_psp_vertex __attribute__((aligned(16))) square_indexed[4] = {
-    {0.0f, 0.0f, 0xFFFFFFFF, 0.0f, 0.0f, -1.0f},
-    {0.0f, 0.0f, 0xFFFFFFFF, 0.0f, 0.0f, -1.0f},
-    {0.0f, 0.0f, 0xFFFFFFFF, 0.0f, 0.0f, -1.0f},
-    {0.0f, 0.0f, 0xFFFFFFFF, 0.0f, 0.0f, -1.0f}
-};
-
-static unsigned short __attribute__((aligned(16))) indices[6] = {
-    0, 1, 2,
-    0, 2, 3
-};
-#endif
-
 void papp_draw_texture(papp_texture texture, float x, float y, float scale)
 {
     float left = x;
     float right = x + (float)texture.width * scale;
     float bottom = y + (float)texture.height * scale;
     float top = y;
-#if defined(PROCYON_DESKTOP)
+
     pgfx_use_texture(&texture);
 
-    pgfx_begin_drawing(PGFX_DRAWFLAG_TRIANGLES | PGFX_DRAWFLAG_INDEXED);
+#if defined(PROCYON_PSP)
+    pgfx_batch_color(255, 255, 255, 255);
+    pgfx_begin_drawing(0);
+        pgfx_batch_texcoord(0.0f, 1.0f); pgfx_batch_vec2(left, top);
+        pgfx_batch_texcoord(1.0f, 0.0f); pgfx_batch_vec2(right, bottom);
+    pgfx_end_drawing();
+#else
+    pgfx_begin_drawing(PGFX_PRIM_TRIANGLES | PGFX_MODE_INDEXED);
     pgfx_reserve(4, 6);
         pgfx_batch_color(255, 255, 255, 255);
 
@@ -207,29 +193,117 @@ void papp_draw_texture(papp_texture texture, float x, float y, float scale)
         pgfx_batch_index(0); pgfx_batch_index(1); pgfx_batch_index(2);
         pgfx_batch_index(0); pgfx_batch_index(2); pgfx_batch_index(3);
     pgfx_end_drawing();
-#elif defined(PROCYON_PSP)
-
-    square_indexed[0].u = 1.0f; square_indexed[0].v = 1.0f;
-    square_indexed[0].x = right; square_indexed[0].y = top;
-
-    square_indexed[1].u = 0.0f; square_indexed[1].v = 1.0f;
-    square_indexed[1].x = left; square_indexed[1].y = top;
-
-    square_indexed[2].u = 0.0f; square_indexed[2].v = 0.0f;
-    square_indexed[2].x = left; square_indexed[2].y = bottom;
-
-    square_indexed[3].u = 1.0f; square_indexed[3].v = 0.0f;
-    square_indexed[3].x = right; square_indexed[3].y = bottom;
-/*
-    struct pgfx_psp_vertex __attribute__((aligned(16))) square_indexed[4] = {
-        {1.0f, 1.0f, 0xFFFFFFFF,  right,    top, -1.0f},
-        {0.0f, 1.0f, 0xFFFFFFFF,   left,    top, -1.0f},
-        {0.0f, 0.0f, 0xFFFFFFFF,   left, bottom, -1.0f},
-        {1.0f, 0.0f, 0xFFFFFFFF,  right, bottom, -1.0f}
-    };
-*/
-    pgfx_use_texture(&texture);
-
-    sceGumDrawArray(GU_TRIANGLES, GU_INDEX_16BIT | GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, 6, indices, square_indexed);
 #endif
+}
+
+#define PMATH_PI 3.14159265358979323846
+#define PMATH_DEG2RAD (PMATH_PI/180.0f)
+
+#include <math.h>
+
+void papp_draw_texture_pro(papp_texture texture, papp_rect source, papp_rect dest,
+                           papp_vec2 origin, float rotation, papp_color tint)
+{
+    float width = (float)texture.width;
+    float height = (float)texture.height;
+
+    bool flip_x = false;
+
+    if (source.width < 0) { flip_x = true; source.width *= -1; }
+    if (source.height < 0) source.y -= source.height;
+
+    papp_vec2 top_left_uv, top_right_uv, bottom_left_uv, bottom_right_uv;
+
+    if(flip_x)
+    {
+        top_left_uv = (papp_vec2){ (source.x + source.width)/width, source.y/height };
+        top_right_uv = (papp_vec2) { source.x/width, source.y/height };
+        bottom_left_uv = (papp_vec2) { (source.x + source.width)/width, (source.y + source.height)/height };
+        bottom_right_uv = (papp_vec2) { source.x/width, (source.y + source.height)/height };
+    }
+    else
+    {
+        top_left_uv = (papp_vec2){ source.x/width, source.y/height };
+        top_right_uv = (papp_vec2) { (source.x + source.width)/width, source.y/height };
+        bottom_left_uv= (papp_vec2) { source.x/width, (source.y + source.height)/height };
+        bottom_right_uv = (papp_vec2) { (source.x + source.width)/width, (source.y + source.height)/height };
+    }
+
+    papp_vec2 top_left = { 0.0f };
+    papp_vec2 top_right = { 0.0f };
+    papp_vec2 bottom_left = { 0.0f };
+    papp_vec2 bottom_right = { 0.0f };
+
+    if(rotation == 0.0f)
+    {
+        float x = dest.x - origin.x;
+        float y = dest.y - origin.y;
+
+        top_left = (papp_vec2){ x, y };
+        top_right = (papp_vec2){ x + dest.width, y };
+        bottom_left = (papp_vec2){ x, y + dest.height };
+        bottom_right = (papp_vec2){ x + dest.width, y + dest.height };
+    }
+    else
+    {
+        float sin_rotation = sinf(rotation * PMATH_DEG2RAD);
+        float cos_rotation = cosf(rotation * PMATH_DEG2RAD);
+        float x = dest.x;
+        float y = dest.y;
+        float dx = -origin.x;
+        float dy = -origin.y;
+
+        top_left.x = x + dx*cos_rotation - dy*sin_rotation;
+        top_left.y = y + dx*sin_rotation + dy*cos_rotation;
+
+        top_right.x = x + (dx + dest.width)*cos_rotation - dy*sin_rotation;
+        top_right.y = y + (dx + dest.width)*sin_rotation + dy*cos_rotation;
+
+        bottom_left.x = x + dx*cos_rotation - (dy + dest.height)*sin_rotation;
+        bottom_left.y = y + dx*sin_rotation + (dy + dest.height)*cos_rotation;
+
+        bottom_right.x = x + (dx + dest.width)*cos_rotation - (dy + dest.height)*sin_rotation;
+        bottom_right.y = y + (dx + dest.width)*sin_rotation + (dy + dest.height)*cos_rotation;
+    }
+
+    #if defined(PROCYON_PSP)
+        bool do_aabb = (rotation == 0.0f);
+    #else
+        bool do_aabb = false;
+    #endif
+
+    pgfx_use_texture(&texture);
+    pgfx_batch_color(255, 255, 255, 255);
+
+    if(do_aabb)
+    {
+        pgfx_begin_drawing(PGFX_PRIM_AABB);
+        pgfx_reserve(2, 0);
+            pgfx_batch_texcoord(top_left_uv.x, top_left_uv.y);
+            pgfx_batch_vec2(top_left.x, top_left.y);
+
+            pgfx_batch_texcoord(bottom_right_uv.x, bottom_right_uv.y);
+            pgfx_batch_vec2(bottom_right.x, bottom_right.y);
+        pgfx_end_drawing();
+    }
+    else
+    {
+        pgfx_begin_drawing(PGFX_PRIM_TRIANGLES | PGFX_MODE_INDEXED);
+        pgfx_reserve(4, 6);
+            pgfx_batch_texcoord(bottom_left_uv.x, bottom_left_uv.y);
+            pgfx_batch_vec2(bottom_left.x, bottom_left.y);
+
+            pgfx_batch_texcoord(top_right_uv.x, top_right_uv.y);
+            pgfx_batch_vec2(top_right.x, top_right.y);
+
+            pgfx_batch_texcoord(top_left_uv.x, top_left_uv.y);
+            pgfx_batch_vec2(top_left.x, top_left.y);
+
+            pgfx_batch_texcoord(bottom_right_uv.x, bottom_right_uv.y);
+            pgfx_batch_vec2(bottom_right.x, bottom_right.y);
+
+            pgfx_batch_index(0); pgfx_batch_index(1); pgfx_batch_index(2);
+            pgfx_batch_index(1); pgfx_batch_index(0); pgfx_batch_index(3);
+        pgfx_end_drawing();
+    }
 }

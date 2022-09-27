@@ -9,6 +9,7 @@
     #include <pspdisplay.h>
     #include <pspgu.h>
     #include <pspgum.h>
+    #include <pspkernel.h>
 
     #define PSP_SCR_W 480
     #define PSP_SCR_H 272
@@ -22,31 +23,14 @@
 
 #ifdef PROCYON_DESKTOP
 
-typedef struct pgfx_gl_state
-{
-    GLuint shader;
-    GLuint vertex_buffer, vertex_array, element_buffer;
-} pgfx_gl_state;
-
-#endif // PROCYON_DESKTOP
-
-#ifdef PROCYON_PSP
-
-typedef struct pgfx_psp_state
-{
-    uint32_t __attribute__((aligned(16))) list[262144];
-} pgfx_psp_state;
-
-#endif // PROCYON_PSP
-
-typedef struct pgfx_vertex
+typedef struct pgfx_gl_vertex
 {
     papp_vec2 pos;
     papp_color color;
     papp_vec2 texcoord;
-} pgfx_vertex;
+} pgfx_gl_vertex;
 
-typedef struct pgfx_draw_call
+typedef struct pgfx_gl_draw_call
 {
     pgfx_draw_flags flags;
     int vertex_data_offset;
@@ -54,25 +38,57 @@ typedef struct pgfx_draw_call
     int index_start;
     int index_count;
 
-    #if defined(PROCYON_DESKTOP)
-        GLuint texture_id;
-    #endif
-} pgfx_draw_call;
+    GLuint texture_id;
+} pgfx_gl_draw_call;
 
-typedef struct pgfx_state
+typedef struct pgfx_gl_state
 {
-    int vertex_mark;
-    papp_color color;
-    papp_vec2 texcoord;
+    GLuint shader;
+    GLuint vertex_buffer, vertex_array, element_buffer;
 
     unsigned char vertex_data[1024];
     int vertex_data_used;
-
     unsigned short indices[1024];
     int index_count;
-
-    pgfx_draw_call draws[32];
+    pgfx_gl_draw_call draws[32];
     int draw_count;
+
+    int vertex_mark;
+} pgfx_gl_state;
+
+#endif // PROCYON_DESKTOP
+
+#ifdef PROCYON_PSP
+
+typedef struct pgfx_psp_vertex
+{
+    papp_vec2 texcoord;
+	unsigned int color;
+	papp_vec3 pos;
+} pgfx_psp_vertex;
+
+
+typedef struct pgfx_psp_state
+{
+    unsigned int __attribute__((aligned(16))) list[262144];
+
+    uint8_t __attribute__((aligned(16))) vertex_data[1024];
+    int vertex_data_used;
+    int vertex_data_start;
+    int vertex_count;
+    uint16_t __attribute__((aligned(16))) index_data[1024];
+    int index_data_used;
+    int index_data_start;
+
+    int flags;
+} pgfx_psp_state;
+
+#endif // PROCYON_PSP
+
+typedef struct pgfx_state
+{
+    papp_color color;
+    papp_vec2 texcoord;
 
     #if defined(PROCYON_DESKTOP)
         pgfx_gl_state gl;
@@ -141,6 +157,59 @@ static GLuint pgfx_gl_create_program(const char *vertex_shader_source, const cha
     return program_handle;
 }
 
+static void pgfx_gl_render_batch()
+{
+    if (pgfx.gl.vertex_data_used > 0)
+    {
+        glBindVertexArray(pgfx.gl.vertex_array);
+
+        float *vertex_buffer = (float *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+        memcpy(vertex_buffer, pgfx.gl.vertex_data, pgfx.gl.vertex_data_used);
+        glUnmapBuffer(GL_ARRAY_BUFFER);
+
+        float *index_buffer = (float *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
+        memcpy(index_buffer, pgfx.gl.indices, pgfx.gl.index_count * sizeof(unsigned short));
+        glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+
+        glUseProgram(pgfx.gl.shader);
+
+        for (int draw_idx = 0; draw_idx < pgfx.gl.draw_count; ++draw_idx)
+        {
+            pgfx_gl_draw_call *draw_call = pgfx.gl.draws + draw_idx;
+            GLenum mode;
+            switch (draw_call->flags & PGFX_PRIM_BITS)
+            {
+                case PGFX_PRIM_TRIANGLES: mode = GL_TRIANGLES; break;
+                case PGFX_PRIM_LINE: mode = GL_LINE; break;
+                default: mode = GL_POINTS; break;
+            }
+
+            glBindTexture(GL_TEXTURE_2D, draw_call->texture_id);
+
+            if (draw_call->flags & PGFX_MODE_INDEXED)
+            {
+                void *index_offset = (void *)(draw_call->index_start * sizeof(GLushort));
+                glDrawElements(mode, draw_call->index_count, GL_UNSIGNED_SHORT, index_offset);
+            }
+            else
+            {
+                // WARNING: Assumes that we are only using one type of vertex
+                //          or that all types are of the same size.
+                int vertex_start = draw_call->vertex_data_offset / sizeof(pgfx_gl_vertex);
+                glDrawArrays(mode, vertex_start, draw_call->vertex_count);
+            }
+        }
+
+        glBindVertexArray(0);
+    }
+
+    pgfx.gl.draw_count = 1;
+    pgfx.gl.vertex_data_used = 0;
+    pgfx.gl.index_count = 0;
+    pgfx.gl.draws[0].vertex_count = 0;
+    pgfx.gl.draws[0].index_count = 0;
+}
+
 static bool pgfx_gl_init()
 {
     // shader program
@@ -187,18 +256,18 @@ static bool pgfx_gl_init()
     glBindVertexArray(pgfx.gl.vertex_array);
 
     glBindBuffer(GL_ARRAY_BUFFER, pgfx.gl.vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(pgfx.vertex_data), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(pgfx.gl.vertex_data), NULL, GL_DYNAMIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pgfx.gl.element_buffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(pgfx.indices), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(pgfx.gl.indices), NULL, GL_DYNAMIC_DRAW);
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(pgfx_vertex), (void*)offsetof(pgfx_vertex, pos));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(pgfx_gl_vertex), (void*)offsetof(pgfx_gl_vertex, pos));
     glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(pgfx_vertex), (void*)offsetof(pgfx_vertex, color));
+    glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(pgfx_gl_vertex), (void*)offsetof(pgfx_gl_vertex, color));
     glEnableVertexAttribArray(1);
 
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(pgfx_vertex), (void*)offsetof(pgfx_vertex, texcoord));
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(pgfx_gl_vertex), (void*)offsetof(pgfx_gl_vertex, texcoord));
     glEnableVertexAttribArray(2);
 
     glEnable(GL_BLEND);
@@ -206,9 +275,9 @@ static bool pgfx_gl_init()
 
     glBindVertexArray(0);
 
-    pgfx.draw_count = 1;
-    pgfx.vertex_data_used = 0;
-    pgfx.draws[0].vertex_count = 0;
+    pgfx.gl.draw_count = 1;
+    pgfx.gl.vertex_data_used = 0;
+    pgfx.gl.draws[0].vertex_count = 0;
 
     return true;
 }
@@ -227,7 +296,7 @@ static void pgfx_gl_start_frame()
 
 static void pgfx_gl_end_frame()
 {
-    pgfx_render_batch();
+    pgfx_gl_render_batch();
 }
 
 static void pgfx_gl_set_clear_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
@@ -238,6 +307,106 @@ static void pgfx_gl_set_clear_color(unsigned char r, unsigned char g, unsigned c
 static void pgfx_gl_clear()
 {
     glClear(GL_COLOR_BUFFER_BIT);
+}
+
+static void pgfx_gl_update_viewport(int width, int height)
+{
+    glViewport(0, 0, width, height);
+    papp_mat4 ortho = papp_ortho(0, (float)width, (float)height, 0.0f, -1.0f, 1.0f);
+    pgfx_gl_uniform_mat4(pgfx.gl.shader, "projection", *ortho.elements);
+}
+
+static void pgfx_gl_begin_drawing(int mode)
+{
+    pgfx_gl_draw_call *last_draw_call = &pgfx.gl.draws[pgfx.gl.draw_count - 1];
+    if (last_draw_call->flags != mode)
+    {
+        GLuint current_texture_id = last_draw_call->texture_id;
+
+        if (last_draw_call->vertex_count > 0)
+            pgfx.gl.draw_count++;
+
+        if (pgfx.gl.draw_count >= PROCYON_ARRAY_COUNT(pgfx.gl.draws))
+            pgfx_gl_render_batch();
+
+        last_draw_call = &pgfx.gl.draws[pgfx.gl.draw_count - 1];
+        last_draw_call->flags = mode;
+        last_draw_call->vertex_count = 0;
+        last_draw_call->index_count = 0;
+        last_draw_call->texture_id = current_texture_id;
+    }
+}
+
+static void pgfx_gl_end_drawing()
+{
+
+}
+
+static void pgfx_gl_reserve(int vertex_data_size, int index_count)
+{
+    pgfx_gl_draw_call *last_draw_call = &pgfx.gl.draws[pgfx.gl.draw_count - 1];
+
+    if (pgfx.gl.vertex_data_used + vertex_data_size >= PROCYON_ARRAY_COUNT(pgfx.gl.vertex_data) ||
+        pgfx.gl.index_count + index_count >= PROCYON_ARRAY_COUNT(pgfx.gl.indices))
+    {
+        pgfx_draw_flags current_flags = last_draw_call->flags;
+        GLuint current_texture_id = last_draw_call->texture_id;
+
+        pgfx_gl_render_batch();
+        last_draw_call = &pgfx.gl.draws[pgfx.gl.draw_count - 1];
+        last_draw_call->flags = current_flags;
+        last_draw_call->texture_id = current_texture_id;
+    }
+
+    // WARNING: Assumes that we are only using one type of vertex
+    //          or that all types are of the same size.
+    pgfx.gl.vertex_mark = pgfx.gl.vertex_data_used / sizeof(pgfx_gl_vertex);
+
+    if (vertex_data_size > 0 && last_draw_call->vertex_count == 0)
+        last_draw_call->vertex_data_offset = pgfx.gl.vertex_data_used;
+
+    if (index_count > 0 && last_draw_call->index_count == 0)
+        last_draw_call->index_start = pgfx.gl.index_count;
+}
+
+static void pgfx_gl_use_texture(papp_texture *texture)
+{
+    pgfx_gl_draw_call *last_draw_call = &pgfx.gl.draws[pgfx.gl.draw_count - 1];
+    if (texture->id != 0 && texture->id != last_draw_call->texture_id)
+    {
+        pgfx_draw_flags current_flags = last_draw_call->flags;
+
+        if (last_draw_call->vertex_count > 0)
+            pgfx.gl.draw_count++;
+
+        if (pgfx.gl.draw_count >= PROCYON_ARRAY_COUNT(pgfx.gl.draws))
+            pgfx_gl_render_batch();
+
+        last_draw_call = &pgfx.gl.draws[pgfx.gl.draw_count - 1];
+        last_draw_call->flags = current_flags;
+        last_draw_call->vertex_count = 0;
+        last_draw_call->index_count = 0;
+        last_draw_call->texture_id = texture->id;
+    }
+}
+
+static void pgfx_gl_batch_vec2(float x, float y)
+{
+    pgfx_gl_vertex *vertex = (pgfx_gl_vertex *)(pgfx.gl.vertex_data + pgfx.gl.vertex_data_used);
+    vertex->pos.x = x;
+    vertex->pos.y = y;
+    vertex->color = pgfx.color;
+    vertex->texcoord = pgfx.texcoord;
+    pgfx.gl.vertex_data_used += sizeof(pgfx_gl_vertex);
+
+    pgfx.gl.draws[pgfx.gl.draw_count - 1].vertex_count++;
+}
+
+void pgfx_gl_batch_index(unsigned short index)
+{
+    pgfx.gl.indices[pgfx.gl.index_count] = pgfx.gl.vertex_mark + index;
+    pgfx.gl.index_count++;
+    pgfx.gl.draws[pgfx.gl.draw_count - 1].index_count++;
 }
 
 #endif // PROCYON_DESKTOP
@@ -285,40 +454,53 @@ void *pgfx_psp_push_static_vram_texture(unsigned int width, unsigned int height,
     return result;
 }
 
+static void pgfx_psp_render_batch()
+{
+    sceGuFinish();
+    sceGuSync(0, 0);
+
+    pgfx.psp.vertex_data_used = 0;
+    pgfx.psp.index_data_used = 0;
+    sceKernelDcacheWritebackRange(pgfx.psp.vertex_data, sizeof(pgfx.psp.vertex_data));
+
+    sceGuStart(GU_DIRECT, pgfx.psp.list);
+}
+
 static bool pgfx_psp_init()
 {
-    void *fbp0 = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_8888);
-    void *fbp1 = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_8888);
-    void *zbp  = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_4444);
+    void* fbp0 = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_8888);
+	void* fbp1 = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_8888);
+	void* zbp = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_4444);
 
 	sceGuInit();
 
 	sceGuStart(GU_DIRECT, pgfx.psp.list);
-    sceGuDrawBuffer(GU_PSM_8888, fbp0, PSP_BUF_W);
-    sceGuDispBuffer(PSP_SCR_W, PSP_SCR_H, fbp1, PSP_BUF_W);
+	sceGuDrawBuffer(GU_PSM_8888, fbp0, PSP_BUF_W);
+	sceGuDispBuffer(PSP_SCR_W, PSP_SCR_H, fbp1, PSP_BUF_W);
 	sceGuDepthBuffer(zbp, PSP_BUF_W);
-    sceGuOffset(2048 - (PSP_SCR_W/2), 2048 - (PSP_SCR_H/2));
-    sceGuViewport(2048, 2048, PSP_SCR_W, PSP_SCR_H);
-    sceGuDepthRange(65535, 0);
-    sceGuScissor(0, 0, PSP_SCR_W, PSP_SCR_H);
+	sceGuOffset(2048 - (PSP_SCR_W/2), 2048 - (PSP_SCR_H/2));
+	sceGuViewport(2048, 2048, PSP_SCR_W, PSP_SCR_H);
+	sceGuDepthRange(65535, 0);
+	sceGuScissor(0, 0, PSP_SCR_W, PSP_SCR_H);
 	sceGuEnable(GU_SCISSOR_TEST);
+	sceGuDepthFunc(GU_GEQUAL);
+    sceGuDisable(GU_DEPTH_TEST);
     sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
     sceGuEnable(GU_BLEND);
-    sceGuDisable(GU_DEPTH_TEST);
-    sceGuFrontFace(GU_CCW);
+	sceGuFrontFace(GU_CCW);
 	sceGuShadeModel(GU_SMOOTH);
 	sceGuEnable(GU_CULL_FACE);
 	sceGuEnable(GU_TEXTURE_2D);
 	sceGuEnable(GU_CLIP_PLANES);
 	sceGuFinish();
-	sceGuSync(0,0);
+	sceGuSync(0, 0);
 
 	sceDisplayWaitVblankStart();
 	sceGuDisplay(GU_TRUE);
 
     sceGumMatrixMode(GU_PROJECTION);
     sceGumLoadIdentity();
-    sceGumOrtho(0.0f, (float)PSP_SCR_W, (float)PSP_SCR_H, 0.0f, -30.0f, 30.0f);
+    sceGumOrtho(0, PSP_SCR_W, PSP_SCR_H, 0, -10.0f, 10.0f);
 
     sceGumMatrixMode(GU_VIEW);
     sceGumLoadIdentity();
@@ -334,13 +516,17 @@ static void pgfx_psp_terminate()
     sceGuTerm();
 }
 
+
 static void pgfx_psp_start_frame()
 {
     sceGuStart(GU_DIRECT, pgfx.psp.list);
 }
 
+
 static void pgfx_psp_end_frame()
 {
+    pgfx_psp_render_batch();
+
     sceGuFinish();
     sceGuSync(0, 0);
     sceDisplayWaitVblankStart();
@@ -349,13 +535,96 @@ static void pgfx_psp_end_frame()
 
 static void pgfx_psp_set_clear_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
-    papp_color color = { r, g, b, a };
-    sceGuClearColor(color.rgba);
+    unsigned int color = r | g << 8 | b << 16 | a << 24;
+    sceGuClearColor(color);
 }
 
 static void pgfx_psp_clear()
 {
     sceGuClear(GU_COLOR_BUFFER_BIT | GU_STENCIL_BUFFER_BIT);
+}
+
+static void pgfx_psp_update_viewport(int width, int height)
+{
+
+}
+
+static void pgfx_psp_begin_drawing(int mode)
+{
+    pgfx.psp.flags = mode;
+    pgfx.psp.vertex_data_start = pgfx.psp.vertex_data_used;
+    pgfx.psp.index_data_start = pgfx.psp.index_data_used;
+    pgfx.psp.vertex_count = 0;
+}
+
+static void pgfx_psp_end_drawing()
+{
+    int prim;
+    switch(pgfx.psp.flags & PGFX_PRIM_BITS)
+    {
+        case PGFX_PRIM_TRIANGLES: prim = GU_TRIANGLES; break;
+        case PGFX_PRIM_LINE: prim = GU_LINES; break;
+        case PGFX_PRIM_AABB: prim = GU_SPRITES; break;
+        default: prim = GU_POINTS; break;
+    }
+
+    int vtype = GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D;
+    int count = 0;
+    void *indices = 0;
+    void *vertices = pgfx.psp.vertex_data + pgfx.psp.vertex_data_start;
+
+    switch(pgfx.psp.flags & PGFX_MODE_BITS)
+    {
+        case PGFX_MODE_INDEXED:
+            vtype |= GU_INDEX_16BIT;
+            count = pgfx.psp.index_data_used - pgfx.psp.index_data_start;
+            indices = pgfx.psp.index_data + pgfx.psp.index_data_start;
+            break;
+
+        default:
+            count = pgfx.psp.vertex_count;
+
+    }
+
+    sceGumDrawArray(prim, vtype, count, indices, vertices);
+}
+
+static void pgfx_psp_reserve(int vertex_data_size, int index_count)
+{
+    if(pgfx.psp.vertex_data_used + vertex_data_size > sizeof(pgfx.psp.vertex_data) ||
+       pgfx.psp.index_data_used + index_count > PROCYON_ARRAY_COUNT(pgfx.psp.index_data))
+    {
+        pgfx_psp_render_batch();
+    }
+}
+
+static void pgfx_psp_use_texture(papp_texture *texture)
+{
+    sceGuTexMode(GU_PSM_8888, 0, 0, 1);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+    sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+    sceGuTexImage(0, texture->padded_width, texture->padded_height, texture->padded_width, texture->data);
+}
+
+static void pgfx_psp_batch_vec2(float x, float y)
+{
+    pgfx_psp_vertex *vertex = (pgfx_psp_vertex *)(pgfx.psp.vertex_data + pgfx.psp.vertex_data_used);
+    vertex->texcoord = pgfx.texcoord;
+    unsigned int color = (pgfx.color.r | pgfx.color.g << 8 | pgfx.color.b << 16 | pgfx.color.a << 24);
+    vertex->color = color;
+    vertex->pos.x = x;
+    vertex->pos.y = y;
+    vertex->pos.z = 0.0f;
+    pgfx.psp.vertex_data_used += sizeof(pgfx_psp_vertex);
+    pgfx.psp.vertex_count++;
+
+}
+
+void pgfx_psp_batch_index(unsigned short index)
+{
+    pgfx.psp.index_data[pgfx.psp.index_data_used] = index;
+    pgfx.psp.index_data_used++;
 }
 
 #endif
@@ -417,161 +686,64 @@ void pgfx_clear()
 void pgfx_update_viewport(int width, int height)
 {
     #if defined(PROCYON_DESKTOP)
-        glViewport(0, 0, width, height);
-        papp_mat4 ortho = papp_ortho(0, (float)width, (float)height, 0.0f, -1.0f, 1.0f);
-        pgfx_gl_uniform_mat4(pgfx.gl.shader, "projection", *ortho.elements);
+        pgfx_gl_update_viewport(width, height);
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_update_viewport(width, height);
     #endif
 }
 
 void pgfx_begin_drawing(int mode)
 {
     #if defined(PROCYON_DESKTOP)
-        pgfx_draw_call *last_draw_call = &pgfx.draws[pgfx.draw_count - 1];
-        if(last_draw_call->flags != mode)
-        {
-            GLuint current_texture_id = last_draw_call->texture_id;
-
-            if(last_draw_call->vertex_count > 0)
-                pgfx.draw_count++;
-
-            if(pgfx.draw_count >= PROCYON_ARRAY_COUNT(pgfx.draws))
-                pgfx_render_batch();
-
-            last_draw_call = &pgfx.draws[pgfx.draw_count - 1];
-            last_draw_call->flags = mode;
-            last_draw_call->vertex_count = 0;
-            last_draw_call->index_count = 0;
-            last_draw_call->texture_id = current_texture_id;
-        }
+        pgfx_gl_begin_drawing(mode);
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_begin_drawing(mode);
     #endif
 }
 
 void pgfx_end_drawing()
 {
-
+    #if defined(PROCYON_DESKTOP)
+        pgfx_gl_end_drawing();
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_end_drawing();
+    #endif
 }
 
 void pgfx_reserve(int vertex_data_size, int index_count)
 {
     #if defined(PROCYON_DESKTOP)
-        pgfx_draw_call *last_draw_call = &pgfx.draws[pgfx.draw_count - 1];
-
-        if(pgfx.vertex_data_used + vertex_data_size >= PROCYON_ARRAY_COUNT(pgfx.vertex_data) ||
-        pgfx.index_count + index_count >= PROCYON_ARRAY_COUNT(pgfx.indices))
-        {
-            pgfx_draw_flags current_flags = last_draw_call->flags;
-            GLuint current_texture_id = last_draw_call->texture_id;
-
-            pgfx_render_batch();
-            last_draw_call = &pgfx.draws[pgfx.draw_count - 1];
-            last_draw_call->flags = current_flags;
-            last_draw_call->texture_id = current_texture_id;
-        }
-
-        // WARNING: Assumes that we are only using one type of vertex
-        //          or that all types are of the same size.
-        pgfx.vertex_mark = pgfx.vertex_data_used / sizeof(pgfx_vertex);
-
-        if(vertex_data_size > 0 && last_draw_call->vertex_count == 0)
-            last_draw_call->vertex_data_offset = pgfx.vertex_data_used;
-
-        if(index_count > 0 && last_draw_call->index_count == 0)
-            last_draw_call->index_start = pgfx.index_count;
-    #endif
-}
-
-void pgfx_render_batch()
-{
-    #if defined(PROCYON_DESKTOP)
-        if(pgfx.vertex_data_used > 0)
-        {
-            glBindVertexArray(pgfx.gl.vertex_array);
-
-            float *vertex_buffer = (float *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-            memcpy(vertex_buffer, pgfx.vertex_data, pgfx.vertex_data_used);
-            glUnmapBuffer(GL_ARRAY_BUFFER);
-
-            float *index_buffer = (float *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
-            memcpy(index_buffer, pgfx.indices, pgfx.index_count * sizeof(unsigned short));
-            glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
-
-            glUseProgram(pgfx.gl.shader);
-
-            for(int draw_idx = 0; draw_idx < pgfx.draw_count; ++draw_idx)
-            {
-                pgfx_draw_call *draw_call = pgfx.draws + draw_idx;
-                GLenum mode;
-                if(draw_call->flags & PGFX_DRAWFLAG_TRIANGLES) mode = GL_TRIANGLES;
-                else if(draw_call->flags & PGFX_DRAWFLAG_LINE) mode = GL_LINE;
-                else continue;
-
-                glBindTexture(GL_TEXTURE_2D, draw_call->texture_id);
-                if(draw_call->flags & PGFX_DRAWFLAG_INDEXED)
-                {
-                    void *index_offset = (void *)(draw_call->index_start * sizeof(GLushort));
-                    glDrawElements(mode, draw_call->index_count, GL_UNSIGNED_SHORT, index_offset);
-                }
-                else
-                {
-                    // WARNING: Assumes that we are only using one type of vertex
-                    //          or that all types are of the same size.
-                    int vertex_start = draw_call->vertex_data_offset / sizeof(pgfx_vertex);
-                    glDrawArrays(mode, vertex_start, draw_call->vertex_count);
-                }
-            }
-
-            glBindVertexArray(0);
-        }
-
-        pgfx.draw_count = 1;
-        pgfx.vertex_data_used = 0;
-        pgfx.index_count = 0;
-        pgfx.draws[0].vertex_count = 0;
-        pgfx.draws[0].index_count = 0;
+        pgfx_gl_reserve(vertex_data_size, index_count);
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_reserve(vertex_data_size, index_count);
     #endif
 }
 
 void pgfx_use_texture(papp_texture *texture)
 {
-#if defined(PROCYON_DESKTOP)
-    pgfx_draw_call *last_draw_call = &pgfx.draws[pgfx.draw_count - 1];
-    if(texture->id != 0 && texture->id != last_draw_call->texture_id)
-    {
-        pgfx_draw_flags current_flags = last_draw_call->flags;
-
-        if(last_draw_call->vertex_count > 0)
-            pgfx.draw_count++;
-
-        if(pgfx.draw_count >= PROCYON_ARRAY_COUNT(pgfx.draws))
-            pgfx_render_batch();
-
-        last_draw_call = &pgfx.draws[pgfx.draw_count - 1];
-        last_draw_call->flags = current_flags;
-        last_draw_call->vertex_count = 0;
-        last_draw_call->index_count = 0;
-        last_draw_call->texture_id = texture->id;
-    }
-#elif defined(PROCYON_PSP)
-    bool swizzled = true;
-    sceGuTexMode(GU_PSM_8888, 0, 0, swizzled);
-    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
-    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-    sceGuTexWrap(GU_REPEAT, GU_REPEAT);
-    sceGuTexImage(0, texture->padded_width, texture->padded_height,
-                  texture->padded_width, texture->data);
-#endif
+    #if defined(PROCYON_DESKTOP)
+        pgfx_gl_use_texture(texture);
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_use_texture(texture);
+    #endif
 }
 
 void pgfx_batch_vec2(float x, float y)
 {
-    pgfx_vertex *vertex = (pgfx_vertex *)(pgfx.vertex_data + pgfx.vertex_data_used);
-    vertex->pos.x = x;
-    vertex->pos.y = y;
-    vertex->color = pgfx.color;
-    vertex->texcoord = pgfx.texcoord;
-    pgfx.vertex_data_used += sizeof(pgfx_vertex);
+    #if defined(PROCYON_DESKTOP)
+        pgfx_gl_batch_vec2(x, y);
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_batch_vec2(x, y);
+    #endif
+}
 
-    pgfx.draws[pgfx.draw_count - 1].vertex_count++;
+void pgfx_batch_index(unsigned short index)
+{
+    #if defined(PROCYON_DESKTOP)
+        pgfx_gl_batch_index(index);
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_batch_index(index);
+    #endif
 }
 
 void pgfx_batch_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
@@ -588,9 +760,3 @@ void pgfx_batch_texcoord(float u, float v)
     pgfx.texcoord.y = v;
 }
 
-void pgfx_batch_index(unsigned short index)
-{
-    pgfx.indices[pgfx.index_count] = pgfx.vertex_mark + index;
-    pgfx.index_count++;
-    pgfx.draws[pgfx.draw_count - 1].index_count++;
-}

@@ -5,13 +5,13 @@
     #define PROCYON_DESKTOP
 #endif
 
-#if 0
-#undef PROCYON_DESKTOP
-#define PSP
+#if 0 && !defined(PSP)
+    #define PSP
 #endif
 
 #if defined(PSP)
     #define PROCYON_PSP
+    #include <pspdebug.h>
 #endif
 
 #if !defined(PROCYON_DEBUG) && !defined(NDEBUG)
@@ -47,10 +47,9 @@ typedef struct papp_vec3
     float x, y, z;
 } papp_vec3;
 
-typedef union papp_color
+typedef struct papp_color
 {
-    struct { unsigned char r, g, b, a; };
-    unsigned int rgba;
+    unsigned char r, g, b, a;
 } papp_color;
 
 typedef struct papp_texture {
@@ -90,6 +89,8 @@ bool papp_key_down(papp_direction direction);
 
 papp_texture papp_load_texture(const char *path);
 void papp_draw_texture(papp_texture texture, float x, float y, float scale);
+void papp_draw_texture_pro(papp_texture texture, papp_rect source, papp_rect dest,
+                           papp_vec2 origin, float rotation, papp_color tint);
 
 papp_mat4 papp_ortho(float left, float right, float bottom, float top, float near, float far);
 

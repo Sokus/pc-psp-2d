@@ -4,7 +4,6 @@
 #include <pspgu.h>
 #include <pspgum.h>
 
-#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include <string.h>
@@ -18,11 +17,44 @@ PSP_MODULE_INFO("Procyon App", 0, 1, 1);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
 
 int running = 1;
-static unsigned int __attribute__((aligned(16))) list[262144];
+
+typedef struct pgfx_vec2
+{
+    float u, v;
+} pgfx_vec2;
+
+typedef struct pgfx_color
+{
+    float r, g, b, a;
+} pgfx_color;
+
+typedef struct pgfx_vec3
+{
+    float x, y, z;
+} pgfx_vec3;
+
+typedef struct pgfx_psp_vertex
+{
+    pgfx_vec2 texcoord;
+    unsigned int color;
+    pgfx_vec3 pos;
+} pgfx_psp_vertex;
+
+typedef struct pgfx_state
+{
+    unsigned int __attribute__((aligned(16))) list[262144];
+    pgfx_psp_vertex __attribute__((aligned(16))) vertex_data[4];
+    int vertex_data_used;
+    int vertex_data_start;
+} pgfx_state;
+pgfx_state pgfx = {0};
+
+
+#if 1
 
 int papp_exit_callback(int arg1, int arg2, void *common)
 {
-	sceKernelExitGame();
+	running = 0;
 	return 0;
 }
 
@@ -82,6 +114,8 @@ void* pgfx_get_static_vram_texture(unsigned int width, unsigned int height, unsi
 	return (void*)(((unsigned int)result) + ((unsigned int)sceGeEdramGetAddr()));
 }
 
+#endif
+
 void pgfx_init() {
     void* fbp0 = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_H, GU_PSM_8888);
 	void* fbp1 = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_H, GU_PSM_8888);
@@ -89,7 +123,7 @@ void pgfx_init() {
 
 	sceGuInit();
 
-	sceGuStart(GU_DIRECT, list);
+	sceGuStart(GU_DIRECT, pgfx.list);
 	sceGuDrawBuffer(GU_PSM_8888, fbp0, PSP_BUF_WIDTH);
 	sceGuDispBuffer(PSP_SCR_W, PSP_SCR_H, fbp1, PSP_BUF_WIDTH);
 	sceGuDepthBuffer(zbp, PSP_BUF_WIDTH);
@@ -100,7 +134,7 @@ void pgfx_init() {
 	sceGuEnable(GU_SCISSOR_TEST);
 	sceGuDepthFunc(GU_GEQUAL);
 	sceGuEnable(GU_DEPTH_TEST);
-	sceGuFrontFace(GU_CW);
+	sceGuFrontFace(GU_CCW);
 	sceGuShadeModel(GU_SMOOTH);
 	sceGuEnable(GU_CULL_FACE);
 	sceGuEnable(GU_TEXTURE_2D);
@@ -110,11 +144,21 @@ void pgfx_init() {
 
 	sceDisplayWaitVblankStart();
 	sceGuDisplay(GU_TRUE);
+
+    sceGumMatrixMode(GU_PROJECTION);
+    sceGumLoadIdentity();
+    sceGumOrtho(0, PSP_SCR_W, PSP_SCR_H, 0, -10.0f, 10.0f);
+
+    sceGumMatrixMode(GU_VIEW);
+    sceGumLoadIdentity();
+
+    sceGumMatrixMode(GU_MODEL);
+    sceGumLoadIdentity();
 }
 
 void pgfx_start_frame()
 {
-    sceGuStart(GU_DIRECT, list);
+    sceGuStart(GU_DIRECT, pgfx.list);
 }
 
 void pgfx_end_frame()
@@ -129,24 +173,6 @@ void pgfx_terminate()
 {
     sceGuTerm();
 }
-
-struct pgfx_psp_vertex
-{
-    float u, v;
-	unsigned int color;
-	float x, y, z;
-};
-
-struct pgfx_psp_vertex __attribute__((aligned(16))) square_indexed[4] = {
-    {0.0f, 0.0f, 0xFFFFFFFF,  0.0f, 16.0f, -1.0f},
-    {0.0f, 1.0f, 0xFFFFFFFF,  0.0f,  0.0f, -1.0f},
-    {1.0f, 1.0f, 0xFFFFFFFF, 16.0f,  0.0f, -1.0f},
-    {1.0f, 0.0f, 0xFFFFFFFF, 16.0f, 16.0f, -1.0f},
-};
-
-unsigned short __attribute__((aligned(16))) indices[6] = {
-    0, 1, 2, 2, 3, 0
-};
 
 void pgfx_swizzle_fast(u8 *out, u8 *in, unsigned int width, unsigned int height)
 {
@@ -263,19 +289,7 @@ int main()
 
     pgfx_init();
 
-    sceGumMatrixMode(GU_PROJECTION);
-    sceGumLoadIdentity();
-    sceGumOrtho(0, PSP_SCR_W, PSP_SCR_H, 0, -10.0f, 10.0f);
-
-    sceGumMatrixMode(GU_VIEW);
-    sceGumLoadIdentity();
-
-    sceGumMatrixMode(GU_MODEL);
-    sceGumLoadIdentity();
-
     papp_texture* texture = papp_load_texture("red.png", GU_TRUE);
-    if(!texture)
-        goto cleanup;
 
     while(running)
     {
@@ -292,7 +306,49 @@ int main()
 
         pgfx_bind_texture(texture);
 
-        sceGumDrawArray(GU_TRIANGLES, GU_INDEX_16BIT | GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, 6, indices, square_indexed);
+        unsigned int vcolor = 0xFFFFFFFF;
+
+        pgfx.vertex_data_used = 0;
+        {
+            pgfx_psp_vertex *vertex;
+            pgfx.vertex_data_start = pgfx.vertex_data_used;
+            vertex = pgfx.vertex_data + pgfx.vertex_data_used;
+            vertex->texcoord.u = 0.0f; vertex->texcoord.v = 1.0f;
+            vertex->color = vcolor;
+            vertex->pos.x = 0.0f; vertex->pos.y = 0.0f, vertex->pos.z = -1.0f;
+            pgfx.vertex_data_used++;
+
+            vertex = pgfx.vertex_data + pgfx.vertex_data_used;
+            vertex->texcoord.u = 1.0f; vertex->texcoord.v = 0.0f;
+            vertex->color = vcolor;
+            vertex->pos.x = 16.0f; vertex->pos.y = 16.0f, vertex->pos.z = -1.0f;
+            pgfx.vertex_data_used++;
+
+            sceGumDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, 2, 0, pgfx.vertex_data + pgfx.vertex_data_start);
+        }
+
+        sceGuFinish();
+        sceGuSync(0, 0);
+        pgfx.vertex_data_used = 0;
+        sceGuStart(GU_DIRECT, pgfx.list);
+
+        {
+            pgfx_psp_vertex *vertex;
+            pgfx.vertex_data_start = pgfx.vertex_data_used;
+            vertex = pgfx.vertex_data + pgfx.vertex_data_used;
+            vertex->texcoord.u = 0.0f; vertex->texcoord.v = 1.0f;
+            vertex->color = vcolor;
+            vertex->pos.x = 32.0f; vertex->pos.y = 32.0f, vertex->pos.z = -1.0f;
+            pgfx.vertex_data_used++;
+
+            vertex = pgfx.vertex_data + pgfx.vertex_data_used;
+            vertex->texcoord.u = 1.0f; vertex->texcoord.v = 0.0f;
+            vertex->color = vcolor;
+            vertex->pos.x = 48.0f; vertex->pos.y = 48.0f, vertex->pos.z = -1.0f;
+            pgfx.vertex_data_used++;
+
+            sceGumDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, 2, 0, pgfx.vertex_data + pgfx.vertex_data_start);
+        }
 
         pgfx_end_frame();
     }

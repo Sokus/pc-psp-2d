@@ -604,7 +604,8 @@ static void pgfx_psp_use_texture(papp_texture *texture)
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuTexFilter(GU_NEAREST, GU_NEAREST);
     sceGuTexWrap(GU_REPEAT, GU_REPEAT);
-    sceGuTexImage(0, texture->padded_width, texture->padded_height, texture->padded_width, texture->data);
+    sceGuTexImage(0, texture->padded_width, texture->padded_height,
+                  texture->padded_width, texture->data);
 }
 
 static void pgfx_psp_batch_vec2(float x, float y)

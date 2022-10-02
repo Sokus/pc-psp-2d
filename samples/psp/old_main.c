@@ -49,9 +49,6 @@ typedef struct pgfx_state
 } pgfx_state;
 pgfx_state pgfx = {0};
 
-
-#if 1
-
 int papp_exit_callback(int arg1, int arg2, void *common)
 {
 	running = 0;
@@ -113,8 +110,6 @@ void* pgfx_get_static_vram_texture(unsigned int width, unsigned int height, unsi
 	void* result = pgfx_get_static_vram_buffer(width, height, pixel_format);
 	return (void*)(((unsigned int)result) + ((unsigned int)sceGeEdramGetAddr()));
 }
-
-#endif
 
 void pgfx_init() {
     void* fbp0 = pgfx_get_static_vram_buffer(PSP_BUF_WIDTH, PSP_SCR_H, GU_PSM_8888);

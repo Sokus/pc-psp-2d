@@ -14,11 +14,13 @@
 
 #include "stb_image.h"
 
+#include <math.h>
+
 #ifdef PROCYON_DESKTOP
 
 static papp_texture papp_gl_load_texture(const char *path)
 {
-    stbi_set_flip_vertically_on_load(1);
+    stbi_set_flip_vertically_on_load(0);
     int width, height;
     unsigned char *data = stbi_load(path, &width, &height, 0, 4);
     if(data)
@@ -165,47 +167,33 @@ papp_texture papp_load_texture(const char *path)
     #endif
 }
 
-void papp_draw_texture(papp_texture texture, float x, float y, float scale)
+void papp_draw_texture(papp_texture texture, float x, float y)
 {
-    float left = x;
-    float right = x + (float)texture.width * scale;
-    float bottom = y + (float)texture.height * scale;
-    float top = y;
+    papp_rect source = { 0.0f, 0.0f, (float)texture.width, (float)texture.height };
+    papp_rect dest = { x, y, (float)texture.width, (float)texture.height };
+    papp_vec2 origin = { 0.0f, 0.0f };
+    papp_color tint = { 255, 255, 255, 255 };
+    papp_draw_texture_ex(texture, source, dest, origin, 0.0f, tint);
 
-    pgfx_use_texture(&texture);
-
-#if defined(PROCYON_PSP)
-    pgfx_batch_color(255, 255, 255, 255);
-    pgfx_begin_drawing(0);
-        pgfx_batch_texcoord(0.0f, 1.0f); pgfx_batch_vec2(left, top);
-        pgfx_batch_texcoord(1.0f, 0.0f); pgfx_batch_vec2(right, bottom);
-    pgfx_end_drawing();
-#else
-    pgfx_begin_drawing(PGFX_PRIM_TRIANGLES | PGFX_MODE_INDEXED);
-    pgfx_reserve(4, 6);
-        pgfx_batch_color(255, 255, 255, 255);
-
-        pgfx_batch_texcoord(1.0f, 1.0f); pgfx_batch_vec2(right, top);
-        pgfx_batch_texcoord(0.0f, 1.0f); pgfx_batch_vec2(left, top);
-        pgfx_batch_texcoord(0.0f, 0.0f); pgfx_batch_vec2(left, bottom);
-        pgfx_batch_texcoord(1.0f, 0.0f); pgfx_batch_vec2(right, bottom);
-
-        pgfx_batch_index(0); pgfx_batch_index(1); pgfx_batch_index(2);
-        pgfx_batch_index(0); pgfx_batch_index(2); pgfx_batch_index(3);
-    pgfx_end_drawing();
-#endif
 }
 
-#define PMATH_PI 3.14159265358979323846
-#define PMATH_DEG2RAD (PMATH_PI/180.0f)
+void papp_draw_texture_rect(papp_texture texture, papp_rect source, papp_rect dest)
+{
+    papp_vec2 origin = { 0.0f, 0.0f };
+    papp_color tint = { 255, 255, 255, 255 };
+    papp_draw_texture_ex(texture, source, dest, origin, 0.0f, tint);
+}
 
-#include <math.h>
-
-void papp_draw_texture_pro(papp_texture texture, papp_rect source, papp_rect dest,
+void papp_draw_texture_ex(papp_texture texture, papp_rect source, papp_rect dest,
                            papp_vec2 origin, float rotation, papp_color tint)
 {
-    float width = (float)texture.width;
-    float height = (float)texture.height;
+    #if defined(PROCYON_PSP)
+        float width = (float)texture.padded_width;
+        float height = (float)texture.padded_height;
+    #else
+        float width = (float)texture.width;
+        float height = (float)texture.height;
+    #endif
 
     bool flip_x = false;
 
@@ -246,8 +234,11 @@ void papp_draw_texture_pro(papp_texture texture, papp_rect source, papp_rect des
     }
     else
     {
-        float sin_rotation = sinf(rotation * PMATH_DEG2RAD);
-        float cos_rotation = cosf(rotation * PMATH_DEG2RAD);
+        const float pi = 3.14159265358979323846f;
+        const float deg_to_rad = pi / 180.0f;
+
+        float sin_rotation = sinf(rotation * deg_to_rad);
+        float cos_rotation = cosf(rotation * deg_to_rad);
         float x = dest.x;
         float y = dest.y;
         float dx = -origin.x;

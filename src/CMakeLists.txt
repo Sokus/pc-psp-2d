@@ -6,16 +6,15 @@ add_library(procyon
 )
 
 if(WIN32)
-    target_link_libraries(procyon
-        glad
-        glfw
-    )
+    target_link_libraries(procyon PRIVATE glad glfw)
 endif()
 
-target_link_libraries(procyon
-    stb::image
-)
+if(PSP)
+    target_link_libraries(procyon PRIVATE pspdebug pspdisplay pspge pspgu pspgum pspctrl)
+endif()
 
+target_link_libraries(procyon PRIVATE stb::image
+)
 
 target_include_directories(procyon
     PUBLIC

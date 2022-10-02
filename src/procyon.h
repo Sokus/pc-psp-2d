@@ -5,7 +5,7 @@
     #define PROCYON_DESKTOP
 #endif
 
-#if 1 && !defined(PSP)
+#if 0 && !defined(PSP)
     #define PSP
 #endif
 

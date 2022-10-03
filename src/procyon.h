@@ -170,44 +170,44 @@ typedef enum papp_key
 
 typedef enum papp_gamepad_button
 {
-    PAPP_GAMEPAD_BUTTON_ACTION_DOWN  = 0,
-    PAPP_GAMEPAD_BUTTON_ACTION_RIGHT = 1,
-    PAPP_GAMEPAD_BUTTON_ACTION_LEFT  = 2,
-    PAPP_GAMEPAD_BUTTON_ACTION_UP    = 3,
-    PAPP_GAMEPAD_BUTTON_LEFT_BUMPER  = 4,
-    PAPP_GAMEPAD_BUTTON_RIGHT_BUMPER = 5,
-    PAPP_GAMEPAD_BUTTON_BACK         = 6,
-    PAPP_GAMEPAD_BUTTON_START        = 7,
-    PAPP_GAMEPAD_BUTTON_GUIDE        = 8,
-    PAPP_GAMEPAD_BUTTON_LEFT_THUMB   = 9,
-    PAPP_GAMEPAD_BUTTON_RIGHT_THUMB  = 10,
-    PAPP_GAMEPAD_BUTTON_DPAD_UP      = 11,
-    PAPP_GAMEPAD_BUTTON_DPAD_RIGHT   = 12,
-    PAPP_GAMEPAD_BUTTON_DPAD_DOWN    = 13,
-    PAPP_GAMEPAD_BUTTON_DPAD_LEFT    = 14,
-    PAPP_GAMEPAD_BUTTON_COUNT        = 15,
+    PAPP_BUTTON_ACTION_DOWN  = 0,
+    PAPP_BUTTON_ACTION_RIGHT = 1,
+    PAPP_BUTTON_ACTION_LEFT  = 2,
+    PAPP_BUTTON_ACTION_UP    = 3,
+    PAPP_BUTTON_LEFT_BUMPER  = 4,
+    PAPP_BUTTON_RIGHT_BUMPER = 5,
+    PAPP_BUTTON_BACK         = 6,
+    PAPP_BUTTON_START        = 7,
+    PAPP_BUTTON_GUIDE        = 8,
+    PAPP_BUTTON_LEFT_THUMB   = 9,
+    PAPP_BUTTON_RIGHT_THUMB  = 10,
+    PAPP_BUTTON_DPAD_UP      = 11,
+    PAPP_BUTTON_DPAD_RIGHT   = 12,
+    PAPP_BUTTON_DPAD_DOWN    = 13,
+    PAPP_BUTTON_DPAD_LEFT    = 14,
+    PAPP_BUTTON_COUNT        = 15,
 
-    PAPP_GAMEPAD_BUTTON_CROSS = PAPP_GAMEPAD_BUTTON_ACTION_DOWN,
-    PAPP_GAMEPAD_BUTTON_CIRCLE = PAPP_GAMEPAD_BUTTON_ACTION_RIGHT,
-    PAPP_GAMEPAD_BUTTON_SQUARE = PAPP_GAMEPAD_BUTTON_ACTION_LEFT,
-    PAPP_GAMEPAD_BUTTON_TRIANGLE = PAPP_GAMEPAD_BUTTON_ACTION_UP,
+    PAPP_BUTTON_CROSS = PAPP_BUTTON_ACTION_DOWN,
+    PAPP_BUTTON_CIRCLE = PAPP_BUTTON_ACTION_RIGHT,
+    PAPP_BUTTON_SQUARE = PAPP_BUTTON_ACTION_LEFT,
+    PAPP_BUTTON_TRIANGLE = PAPP_BUTTON_ACTION_UP,
 
-    PAPP_GAMEPAD_BUTTON_A = PAPP_GAMEPAD_BUTTON_ACTION_DOWN,
-    PAPP_GAMEPAD_BUTTON_B = PAPP_GAMEPAD_BUTTON_ACTION_RIGHT,
-    PAPP_GAMEPAD_BUTTON_X = PAPP_GAMEPAD_BUTTON_ACTION_LEFT,
-    PAPP_GAMEPAD_BUTTON_Y = PAPP_GAMEPAD_BUTTON_ACTION_UP,
+    PAPP_BUTTON_A = PAPP_BUTTON_ACTION_DOWN,
+    PAPP_BUTTON_B = PAPP_BUTTON_ACTION_RIGHT,
+    PAPP_BUTTON_X = PAPP_BUTTON_ACTION_LEFT,
+    PAPP_BUTTON_Y = PAPP_BUTTON_ACTION_UP,
 
 } papp_gamepad_button;
 
 typedef enum papp_gamepad_axis
 {
-    PAPP_GAMEPAD_AXIS_LEFT_X        = 0,
-    PAPP_GAMEPAD_AXIS_LEFT_Y        = 1,
-    PAPP_GAMEPAD_AXIS_RIGHT_X       = 2,
-    PAPP_GAMEPAD_AXIS_RIGHT_Y       = 3,
-    PAPP_GAMEPAD_AXIS_LEFT_TRIGGER  = 4,
-    PAPP_GAMEPAD_AXIS_RIGHT_TRIGGER = 5,
-    PAPP_GAMEPAD_AXIS_COUNT         = 6,
+    PAPP_AXIS_LEFT_X        = 0,
+    PAPP_AXIS_LEFT_Y        = 1,
+    PAPP_AXIS_RIGHT_X       = 2,
+    PAPP_AXIS_RIGHT_Y       = 3,
+    PAPP_AXIS_LEFT_TRIGGER  = 4,
+    PAPP_AXIS_RIGHT_TRIGGER = 5,
+    PAPP_AXIS_COUNT         = 6,
 } papp_gamepad_axis;
 
 typedef struct papp_texture {
@@ -243,13 +243,14 @@ void papp_end_frame();
 void papp_set_clear_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 void papp_clear();
 
-bool papp_key_is_down(papp_key key);
+bool papp_key_down(papp_key key);
 bool papp_key_pressed(papp_key key);
 bool papp_key_released(papp_key key);
-bool papp_gamepad_button_is_down(papp_gamepad_button button);
-bool papp_gamepad_button_pressed(papp_gamepad_button button);
-bool papp_gamepad_button_released(papp_gamepad_button button);
-float papp_axis_value(papp_gamepad_axis axis);
+
+bool papp_button_down(papp_gamepad_button button);
+bool papp_button_pressed(papp_gamepad_button button);
+bool papp_button_released(papp_gamepad_button button);
+float papp_axis(papp_gamepad_axis axis);
 
 papp_texture papp_load_texture(const char *path);
 void papp_draw_texture(papp_texture texture, float x, float y);

@@ -19,14 +19,14 @@ int main()
 
         float dt = 0.0166f;
 
-        float input_x = (-1.0f * (float)papp_key_is_down(PAPP_KEY_A) + (float)papp_key_is_down(PAPP_KEY_D) +
-                         -1.0f * (float)papp_gamepad_button_is_down(PAPP_GAMEPAD_BUTTON_DPAD_LEFT) +
-                         (float)papp_gamepad_button_is_down(PAPP_GAMEPAD_BUTTON_DPAD_RIGHT) +
-                         papp_axis_value(PAPP_GAMEPAD_AXIS_LEFT_X));
-        float input_y = (-1.0f * (float)papp_key_is_down(PAPP_KEY_W) + (float)papp_key_is_down(PAPP_KEY_S) +
-                         -1.0f * (float)papp_gamepad_button_is_down(PAPP_GAMEPAD_BUTTON_DPAD_UP) +
-                         (float)papp_gamepad_button_is_down(PAPP_GAMEPAD_BUTTON_DPAD_DOWN) +
-                         papp_axis_value(PAPP_GAMEPAD_AXIS_LEFT_Y));
+        float input_x = (-1.0f * (float)papp_key_down(PAPP_KEY_A) + (float)papp_key_down(PAPP_KEY_D) +
+                         -1.0f * (float)papp_button_down(PAPP_BUTTON_DPAD_LEFT) +
+                         (float)papp_button_down(PAPP_BUTTON_DPAD_RIGHT) +
+                         papp_axis(PAPP_AXIS_LEFT_X));
+        float input_y = (-1.0f * (float)papp_key_down(PAPP_KEY_W) + (float)papp_key_down(PAPP_KEY_S) +
+                         -1.0f * (float)papp_button_down(PAPP_BUTTON_DPAD_UP) +
+                         (float)papp_button_down(PAPP_BUTTON_DPAD_DOWN) +
+                         papp_axis(PAPP_AXIS_LEFT_Y));
         input_x = input_x > 1.0f ? 1.0f : input_x < -1.0f ? -1.0f : input_x;
         input_y = input_y > 1.0f ? 1.0f : input_y < -1.0f ? -1.0f : input_y;
 

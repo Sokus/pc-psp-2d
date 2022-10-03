@@ -38,9 +38,9 @@
 
 typedef struct papp_gamepad
 {
-    bool button_state[PAPP_GAMEPAD_BUTTON_COUNT];
-    bool button_state_previous[PAPP_GAMEPAD_BUTTON_COUNT];
-    float axis_state[PAPP_GAMEPAD_AXIS_COUNT];
+    bool button_state[PAPP_BUTTON_COUNT];
+    bool button_state_previous[PAPP_BUTTON_COUNT];
+    float axis_state[PAPP_AXIS_COUNT];
 } papp_gamepad;
 
 typedef struct papp_input
@@ -168,10 +168,10 @@ static void papp_desktop_end_frame()
         if(!glfwJoystickIsGamepad(jid)) continue;
         if(!glfwGetGamepadState(jid, &state)) continue;
 
-        for(int button = 0; button < PAPP_GAMEPAD_BUTTON_COUNT; button++)
+        for(int button = 0; button < PAPP_BUTTON_COUNT; button++)
             papp.input.gamepad.button_state[button] = state.buttons[button];
 
-        for(int axis = 0; axis < PAPP_GAMEPAD_AXIS_COUNT; axis++)
+        for(int axis = 0; axis < PAPP_AXIS_COUNT; axis++)
             papp.input.gamepad.axis_state[axis] = state.axes[axis];
     }
 }
@@ -244,21 +244,21 @@ static void papp_psp_start_frame()
     SceCtrlData ctrl_data;
     sceCtrlReadBufferPositive(&ctrl_data, 1);
 
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_CROSS] = ctrl_data.Buttons & PSP_CTRL_CROSS;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_CIRCLE] = ctrl_data.Buttons & PSP_CTRL_CIRCLE;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_SQUARE] = ctrl_data.Buttons & PSP_CTRL_SQUARE;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_TRIANGLE] = ctrl_data.Buttons & PSP_CTRL_TRIANGLE;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_LEFT_BUMPER] = ctrl_data.Buttons & PSP_CTRL_LTRIGGER;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_RIGHT_BUMPER] = ctrl_data.Buttons & PSP_CTRL_RTRIGGER;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_BACK] = ctrl_data.Buttons & PSP_CTRL_SELECT;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_START] = ctrl_data.Buttons & PSP_CTRL_START;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_DPAD_DOWN] = ctrl_data.Buttons & PSP_CTRL_DOWN;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_DPAD_LEFT] = ctrl_data.Buttons & PSP_CTRL_LEFT;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_DPAD_RIGHT] = ctrl_data.Buttons & PSP_CTRL_RIGHT;
-    papp.input.gamepad.button_state[PAPP_GAMEPAD_BUTTON_DPAD_UP] = ctrl_data.Buttons & PSP_CTRL_UP;
+    papp.input.gamepad.button_state[PAPP_BUTTON_CROSS] = ctrl_data.Buttons & PSP_CTRL_CROSS;
+    papp.input.gamepad.button_state[PAPP_BUTTON_CIRCLE] = ctrl_data.Buttons & PSP_CTRL_CIRCLE;
+    papp.input.gamepad.button_state[PAPP_BUTTON_SQUARE] = ctrl_data.Buttons & PSP_CTRL_SQUARE;
+    papp.input.gamepad.button_state[PAPP_BUTTON_TRIANGLE] = ctrl_data.Buttons & PSP_CTRL_TRIANGLE;
+    papp.input.gamepad.button_state[PAPP_BUTTON_LEFT_BUMPER] = ctrl_data.Buttons & PSP_CTRL_LTRIGGER;
+    papp.input.gamepad.button_state[PAPP_BUTTON_RIGHT_BUMPER] = ctrl_data.Buttons & PSP_CTRL_RTRIGGER;
+    papp.input.gamepad.button_state[PAPP_BUTTON_BACK] = ctrl_data.Buttons & PSP_CTRL_SELECT;
+    papp.input.gamepad.button_state[PAPP_BUTTON_START] = ctrl_data.Buttons & PSP_CTRL_START;
+    papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_DOWN] = ctrl_data.Buttons & PSP_CTRL_DOWN;
+    papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_LEFT] = ctrl_data.Buttons & PSP_CTRL_LEFT;
+    papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_RIGHT] = ctrl_data.Buttons & PSP_CTRL_RIGHT;
+    papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_UP] = ctrl_data.Buttons & PSP_CTRL_UP;
 
-    papp.input.gamepad.axis_state[PAPP_GAMEPAD_AXIS_LEFT_X] = papp_psp_process_axis_value(ctrl_data.Lx);
-    papp.input.gamepad.axis_state[PAPP_GAMEPAD_AXIS_LEFT_Y] = papp_psp_process_axis_value(ctrl_data.Ly);
+    papp.input.gamepad.axis_state[PAPP_AXIS_LEFT_X] = papp_psp_process_axis_value(ctrl_data.Lx);
+    papp.input.gamepad.axis_state[PAPP_AXIS_LEFT_Y] = papp_psp_process_axis_value(ctrl_data.Ly);
 
     pgfx_start_frame();
 }
@@ -325,7 +325,7 @@ void papp_clear()
     pgfx_clear();
 }
 
-bool papp_key_is_down(papp_key key)
+bool papp_key_down(papp_key key)
 {
     bool is_down = false;
         #if defined(PROCYON_DESKTOP)
@@ -357,34 +357,34 @@ bool papp_key_released(papp_key key)
     return released;
 }
 
-bool papp_gamepad_button_is_down(papp_gamepad_button button)
+bool papp_button_down(papp_gamepad_button button)
 {
     bool is_down = false;
-    if(button >= 0 && button < PAPP_GAMEPAD_BUTTON_COUNT)
+    if(button >= 0 && button < PAPP_BUTTON_COUNT)
         is_down = papp.input.gamepad.button_state[button];
     return is_down;
 }
 
-bool papp_gamepad_button_pressed(papp_gamepad_button button)
+bool papp_button_pressed(papp_gamepad_button button)
 {
     bool pressed = false;
-    if(button >= 0 && button < PAPP_GAMEPAD_BUTTON_COUNT)
+    if(button >= 0 && button < PAPP_BUTTON_COUNT)
         pressed = (papp.input.gamepad.button_state[button] && !papp.input.gamepad.button_state_previous[button]);
     return pressed;
 }
 
-bool papp_gamepad_button_released(papp_gamepad_button button)
+bool papp_button_released(papp_gamepad_button button)
 {
     bool released = false;
-    if(button >= 0 && button < PAPP_GAMEPAD_BUTTON_COUNT)
+    if(button >= 0 && button < PAPP_BUTTON_COUNT)
         released = (!papp.input.gamepad.button_state[button] && papp.input.gamepad.button_state_previous[button]);
     return released;
 }
 
-float papp_axis_value(papp_gamepad_axis axis)
+float papp_axis(papp_gamepad_axis axis)
 {
     float value = 0.0f;
-    if(axis >= 0 && axis < PAPP_GAMEPAD_AXIS_COUNT)
+    if(axis >= 0 && axis < PAPP_AXIS_COUNT)
         value = papp.input.gamepad.axis_state[axis];
     return value;
 }

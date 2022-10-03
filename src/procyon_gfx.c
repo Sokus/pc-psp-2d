@@ -483,7 +483,6 @@ static bool pgfx_psp_init()
 	sceGuDepthRange(65535, 0);
 	sceGuScissor(0, 0, PSP_SCR_W, PSP_SCR_H);
 	sceGuEnable(GU_SCISSOR_TEST);
-	sceGuDepthFunc(GU_GEQUAL);
     sceGuDisable(GU_DEPTH_TEST);
     sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
     sceGuEnable(GU_BLEND);

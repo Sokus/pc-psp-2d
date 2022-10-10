@@ -10,6 +10,11 @@
     #include <pspgu.h>
     #include <pspgum.h>
     #include <malloc.h>
+    #include <string.h>
+
+    #define PSP_SCR_W 480
+    #define PSP_SCR_H 272
+    #define PSP_BUF_W 512
 #endif
 
 #include "stb_image.h"
@@ -49,6 +54,16 @@ static papp_texture papp_gl_load_texture(const char *path)
     }
 }
 
+static papp_render_target papp_gl_create_render_target(int width, int height)
+{
+    unsigned int fbo_id = 0;
+    glGenFramebuffers(1, &fbo_id);
+    // glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+
+    return render_target;
+}
+
 #endif // PROCYON_DESKTOP
 
 #ifdef PROCYON_PSP
@@ -84,16 +99,6 @@ static void papp_psp_swizzle_fast(u8 *out, const u8 *in, const unsigned int widt
     }
 }
 
-static unsigned int papp_psp_closest_greater_pow2(const unsigned int value)
-{
-    if(value > (1 << 31))
-        return 0;
-    unsigned int poweroftwo = 1;
-    while (poweroftwo < value)
-        poweroftwo <<= 1;
-    return poweroftwo;
-}
-
 static void papp_psp_copy_texture_data(void *dest, const void *src, const int pW, const int width, const int height)
 {
     for (unsigned int y = 0; y < height; y++)
@@ -114,8 +119,8 @@ static papp_texture papp_psp_load_texture(const char *path)
 
     if(data)
     {
-        int padded_width = papp_psp_closest_greater_pow2(width);
-        int padded_height = papp_psp_closest_greater_pow2(height);
+        int padded_width = papp_closest_greater_pow2(width);
+        int padded_height = papp_closest_greater_pow2(height);
         int size = padded_width * padded_height * 4;
 
         unsigned int *data_buffer = memalign(16, size);
@@ -134,11 +139,13 @@ static papp_texture papp_psp_load_texture(const char *path)
             {
                 papp_psp_swizzle_fast((u8 *)swizzled_pixels, (const u8 *)data_buffer, padded_width * 4, padded_height);
 
+                texture.tex_data = swizzled_pixels;
                 texture.data = swizzled_pixels;
                 texture.width = width;
                 texture.height = height;
                 texture.padded_width = padded_width;
                 texture.padded_height = padded_height;
+                texture.swizzled = true;
 
                 sceKernelDcacheWritebackInvalidateAll();
             }
@@ -154,6 +161,30 @@ static papp_texture papp_psp_load_texture(const char *path)
     }
 
     return texture;
+}
+
+static papp_render_target papp_psp_create_render_target(int width, int height)
+{
+    unsigned int padded_width = papp_closest_greater_pow2(width);
+    unsigned int padded_height = papp_closest_greater_pow2(height);
+
+    unsigned int framebuffer_size = pgfx_psp_get_buffer_size(padded_width, padded_height, GU_PSM_8888);
+    void *edram_offset = pgfx_psp_static_push(framebuffer_size);
+    void *texture_address = sceGeEdramGetAddr() + (int)edram_offset;
+
+    memset(texture_address, 0xFF, framebuffer_size);
+
+    papp_render_target render_target;
+    render_target.texture.tex_data = texture_address;
+    render_target.texture.data = texture_address;
+    render_target.texture.width = width;
+    render_target.texture.height = height;
+    render_target.texture.padded_width = padded_width;
+    render_target.texture.padded_height = padded_height;
+    render_target.texture.swizzled = false;
+    render_target.edram_offset = edram_offset;
+
+    return render_target;
 }
 
 #endif // PROCYON_PSP
@@ -297,4 +328,23 @@ void papp_draw_texture_ex(papp_texture texture, papp_rect source, papp_rect dest
             pgfx_batch_index(1); pgfx_batch_index(0); pgfx_batch_index(3);
         pgfx_end_drawing();
     }
+}
+
+papp_render_target papp_create_render_target(int width, int height)
+{
+    #if defined(PROCYON_DESKTOP)
+        return (papp_render_target){0};
+    #elif defined(PROCYON_PSP)
+        return papp_psp_create_render_target(width, height);
+    #endif
+}
+
+void papp_enable_render_target(papp_render_target *render_target)
+{
+    pgfx_enable_render_target(render_target);
+}
+
+void papp_disable_render_target(void *temp_fb)
+{
+    pgfx_disable_render_target(temp_fb);
 }

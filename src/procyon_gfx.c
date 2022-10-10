@@ -72,6 +72,8 @@ typedef struct pgfx_psp_state
 {
     unsigned int __attribute__((aligned(16))) list[262144];
 
+    void *current_drawbuffer;
+
     uint8_t __attribute__((aligned(16))) vertex_data[1024];
     int vertex_data_used;
     int vertex_data_start;
@@ -92,7 +94,8 @@ typedef struct pgfx_state
 
     #if defined(PROCYON_DESKTOP)
         pgfx_gl_state gl;
-    #elif defined(PROCYON_PSP)
+    #endif
+    #if defined(PROCYON_PSP)
         pgfx_psp_state psp;
     #endif
 } pgfx_state;
@@ -413,7 +416,7 @@ void pgfx_gl_batch_index(unsigned short index)
 
 #ifdef PROCYON_PSP
 
-static unsigned int pgfx_psp_get_buffer_size(unsigned int width, unsigned int height, unsigned int pixel_format)
+unsigned int pgfx_psp_get_buffer_size(unsigned int width, unsigned int height, unsigned int pixel_format)
 {
 	switch (pixel_format)
 	{
@@ -438,19 +441,25 @@ static unsigned int pgfx_psp_get_buffer_size(unsigned int width, unsigned int he
 	}
 }
 
-static void *pgfx_psp_push_static_buffer(unsigned int width, unsigned int height, unsigned int pixel_format)
+void *pgfx_psp_static_push(unsigned int size)
 {
     static unsigned int static_offset = 0;
-    unsigned int size = pgfx_psp_get_buffer_size(width, height, pixel_format);
-    void *result = (void *)static_offset;
+    void *result = (void*)static_offset;
     static_offset += size;
+    return result;
+}
+
+void *pgfx_psp_push_static_buffer(unsigned int width, unsigned int height, unsigned int pixel_format)
+{
+    unsigned int size = pgfx_psp_get_buffer_size(width, height, pixel_format);
+    void *result = pgfx_psp_static_push(size);
     return result;
 }
 
 void *pgfx_psp_push_static_vram_texture(unsigned int width, unsigned int height, unsigned int pixel_format)
 {
-    void *vram_buffer_offset = pgfx_psp_push_static_buffer(width, height, pixel_format);
-    void *result = (void *)((unsigned int)sceGeEdramGetAddr() + (unsigned int)vram_buffer_offset);
+    unsigned int size = pgfx_psp_get_buffer_size(width, height, pixel_format);
+    void *result = sceGeEdramGetAddr() + (int)pgfx_psp_static_push(size);
     return result;
 }
 
@@ -468,44 +477,53 @@ static void pgfx_psp_render_batch()
 
 static bool pgfx_psp_init()
 {
-    void* fbp0 = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_8888);
-	void* fbp1 = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_8888);
-	void* zbp = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_4444);
+
+    void *fbp0 = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_8888);
+    void *fbp1 = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_8888);
+    void *zbp  = pgfx_psp_push_static_buffer(PSP_BUF_W, PSP_SCR_H, GU_PSM_4444);
+    pgfx.psp.current_drawbuffer = fbp0;
 
 	sceGuInit();
-
 	sceGuStart(GU_DIRECT, pgfx.psp.list);
 	sceGuDrawBuffer(GU_PSM_8888, fbp0, PSP_BUF_W);
 	sceGuDispBuffer(PSP_SCR_W, PSP_SCR_H, fbp1, PSP_BUF_W);
 	sceGuDepthBuffer(zbp, PSP_BUF_W);
-	sceGuOffset(2048 - (PSP_SCR_W/2), 2048 - (PSP_SCR_H/2));
-	sceGuViewport(2048, 2048, PSP_SCR_W, PSP_SCR_H);
-	sceGuDepthRange(65535, 0);
+	sceGuOffset(2048 - (PSP_SCR_W/2),2048 - (PSP_SCR_H/2));
+	sceGuViewport(2048,2048, PSP_SCR_W, PSP_SCR_H);
+
+	sceGuFrontFace(GU_CCW);
+	sceGuEnable(GU_CULL_FACE);
+	sceGuEnable(GU_CLIP_PLANES);
+
 	sceGuScissor(0, 0, PSP_SCR_W, PSP_SCR_H);
 	sceGuEnable(GU_SCISSOR_TEST);
-    sceGuDisable(GU_DEPTH_TEST);
-    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
-    sceGuEnable(GU_BLEND);
-	sceGuFrontFace(GU_CCW);
+
+	sceGuDepthRange(65535, 0);
+	sceGuDepthFunc(GU_GEQUAL);
+	sceGuDisable(GU_DEPTH_TEST);
+
 	sceGuShadeModel(GU_SMOOTH);
-	sceGuEnable(GU_CULL_FACE);
-	sceGuEnable(GU_TEXTURE_2D);
-	sceGuEnable(GU_CLIP_PLANES);
+
+    sceGuSetStatus(GU_BLEND, GU_TRUE);
+	sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+
+    sceGuEnable(GU_TEXTURE_2D);
+
 	sceGuFinish();
-	sceGuSync(0, 0);
+	sceGuSync(0,0);
 
 	sceDisplayWaitVblankStart();
 	sceGuDisplay(GU_TRUE);
 
+	sceGumMatrixMode(GU_VIEW);
+    sceGumLoadIdentity();
+
+	sceGumMatrixMode(GU_MODEL);
+	sceGumLoadIdentity();
+
     sceGumMatrixMode(GU_PROJECTION);
     sceGumLoadIdentity();
-    sceGumOrtho(0, PSP_SCR_W, PSP_SCR_H, 0, -10.0f, 10.0f);
-
-    sceGumMatrixMode(GU_VIEW);
-    sceGumLoadIdentity();
-
-    sceGumMatrixMode(GU_MODEL);
-    sceGumLoadIdentity();
+    sceGumOrtho(0, PSP_SCR_W, PSP_SCR_H, 0, -10, 10);
 
     return true;
 }
@@ -515,12 +533,10 @@ static void pgfx_psp_terminate()
     sceGuTerm();
 }
 
-
 static void pgfx_psp_start_frame()
 {
     sceGuStart(GU_DIRECT, pgfx.psp.list);
 }
-
 
 static void pgfx_psp_end_frame()
 {
@@ -529,7 +545,7 @@ static void pgfx_psp_end_frame()
     sceGuFinish();
     sceGuSync(0, 0);
     sceDisplayWaitVblankStart();
-	sceGuSwapBuffers();
+	pgfx.psp.current_drawbuffer = sceGuSwapBuffers();
 }
 
 static void pgfx_psp_set_clear_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
@@ -540,7 +556,7 @@ static void pgfx_psp_set_clear_color(unsigned char r, unsigned char g, unsigned 
 
 static void pgfx_psp_clear()
 {
-    sceGuClear(GU_COLOR_BUFFER_BIT | GU_STENCIL_BUFFER_BIT);
+    sceGuClear(GU_COLOR_BUFFER_BIT);
 }
 
 static void pgfx_psp_update_viewport(int width, int height)
@@ -599,7 +615,7 @@ static void pgfx_psp_reserve(int vertex_data_size, int index_count)
 
 static void pgfx_psp_use_texture(papp_texture *texture)
 {
-    sceGuTexMode(GU_PSM_8888, 0, 0, 1);
+    sceGuTexMode(GU_PSM_8888, 0, 0, texture->swizzled);
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuTexFilter(GU_NEAREST, GU_NEAREST);
     sceGuTexWrap(GU_REPEAT, GU_REPEAT);
@@ -621,10 +637,47 @@ static void pgfx_psp_batch_vec2(float x, float y)
 
 }
 
-void pgfx_psp_batch_index(unsigned short index)
+static void pgfx_psp_batch_index(unsigned short index)
 {
     pgfx.psp.index_data[pgfx.psp.index_data_used] = index;
     pgfx.psp.index_data_used++;
+}
+
+static papp_texture pgfx_psp_create_texture(void *data, int width, int height, bool swizzle)
+{
+
+}
+
+static void pgfx_psp_enable_render_target(papp_render_target *render_target)
+{
+    void *fbp = render_target->edram_offset;
+    int fbw = render_target->texture.padded_width;
+    sceGuDrawBufferList(GU_PSM_8888, fbp, fbw);
+
+    int width = render_target->texture.width;
+    int height = render_target->texture.height;
+
+    sceGumMatrixMode(GU_PROJECTION);
+    sceGumLoadIdentity();
+    sceGumOrtho(0.0f, width, height, 0.0f, -10.0f, 10.0f);
+    sceGuScissor(0, 0, width, height);
+    sceGuOffset(2048 - (width/2), 2048 - (height/2));
+    sceGuViewport(2048, 2048, width, height);
+
+}
+
+static void pgfx_psp_disable_render_target(void *temp_fb)
+{
+    void *fbp = temp_fb ? temp_fb : pgfx.psp.current_drawbuffer;
+    int fbw = PSP_BUF_W;
+    sceGuDrawBufferList(GU_PSM_8888, fbp, fbw);
+
+    sceGumMatrixMode(GU_PROJECTION);
+    sceGumLoadIdentity();
+    sceGumOrtho(0.0f, PSP_SCR_W, PSP_SCR_H, 0.0f, -10.0f, 10.0f);
+    sceGuScissor(0, 0, PSP_SCR_W, PSP_SCR_H);
+    sceGuOffset(2048 - (PSP_SCR_W/2), 2048 - (PSP_SCR_H/2));
+    sceGuViewport(2048, 2048, PSP_SCR_W, PSP_SCR_H);
 }
 
 #endif
@@ -760,3 +813,25 @@ void pgfx_batch_texcoord(float u, float v)
     pgfx.texcoord.y = v;
 }
 
+papp_texture pgfx_create_texture(void *data, int width, int height, bool swizzle)
+{
+
+}
+
+void pgfx_enable_render_target(papp_render_target *render_target)
+{
+    #if defined(PROCYON_DESKTOP)
+
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_enable_render_target(render_target);
+    #endif
+}
+
+void pgfx_disable_render_target(void *temp_fb)
+{
+    #if defined(PROCYON_DESKTOP)
+
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_disable_render_target(temp_fb);
+    #endif
+}

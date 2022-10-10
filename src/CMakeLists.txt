@@ -10,7 +10,7 @@ if(WIN32)
 endif()
 
 if(PSP)
-    target_link_libraries(procyon PRIVATE pspdebug pspdisplay pspge pspgu pspgum pspctrl)
+    target_link_libraries(procyon PUBLIC pspdebug pspdisplay pspge pspgu pspgum pspctrl)
 endif()
 
 target_link_libraries(procyon PRIVATE stb::image

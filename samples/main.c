@@ -1,72 +1,38 @@
 #include "procyon.h"
 
-int main()
+int main(int argc, char* argv[])
 {
-    papp_init(960, 480, "Procyon App");
-    papp_set_clear_color(46, 34, 47, 255);
+    papp_init(960, 540, "Test");
 
-    papp_texture texture = papp_load_texture("atlas.png");
+    papp_texture red = papp_load_texture("red.png");
+    papp_render_target render_target = papp_create_render_target(64.0f, 64.0f);
 
-    float player_x = 100.0f;
-    float player_y = 100.0f;
-
-    float rotation = 0;
-
-    while (!papp_should_close())
-    {
+	while(!papp_should_close())
+	{
         papp_start_frame();
+
+        papp_enable_render_target(&render_target);
+        {
+            papp_set_clear_color(0, 12, 24, 255);
+            papp_clear();
+
+            papp_rect source = {0.0f, 0.0f, 8.0f, 8.0f};
+            papp_rect destination = {0.0f, 0.0f, 32.0f, 32.0f};
+            papp_draw_texture_rect(red, source, destination);
+        }
+        papp_disable_render_target(0);
+
+        papp_set_clear_color(20, 0, 12, 255);
         papp_clear();
 
-        float dt = 0.0166f;
-
-        float input_x = (-1.0f * (float)papp_key_down(PAPP_KEY_A) + (float)papp_key_down(PAPP_KEY_D) +
-                         -1.0f * (float)papp_button_down(PAPP_BUTTON_DPAD_LEFT) +
-                         (float)papp_button_down(PAPP_BUTTON_DPAD_RIGHT) +
-                         papp_axis(PAPP_AXIS_LEFT_X));
-        float input_y = (-1.0f * (float)papp_key_down(PAPP_KEY_W) + (float)papp_key_down(PAPP_KEY_S) +
-                         -1.0f * (float)papp_button_down(PAPP_BUTTON_DPAD_UP) +
-                         (float)papp_button_down(PAPP_BUTTON_DPAD_DOWN) +
-                         papp_axis(PAPP_AXIS_LEFT_Y));
-        input_x = input_x > 1.0f ? 1.0f : input_x < -1.0f ? -1.0f : input_x;
-        input_y = input_y > 1.0f ? 1.0f : input_y < -1.0f ? -1.0f : input_y;
-
-        player_x += 200.0f * input_x * dt;
-        player_y += 200.0f * input_y * dt;
-
-        papp_vec2 tile = { 0.0f, 0.0f };
-        papp_rect source = { tile.x * 8.0f, tile.y * 8.0f, 8.0f, 8.0f };
-        papp_rect dest = { player_x, player_y, 32.0f, 32.0f };
-        papp_draw_texture_rect(texture, source, dest);
+        papp_rect source = {0.0f, 0.0f, 64.0f, 64.0f};
+        papp_rect destination = {0.0f, 0.0f, 256.0f, 256.0f};
+        papp_draw_texture_rect(render_target.texture, source, destination);
 
         papp_end_frame();
-    }
+	}
 
     papp_terminate();
-    return 0;
+
+	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

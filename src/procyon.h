@@ -6,12 +6,11 @@
 #endif
 
 #if 0 && !defined(PSP)
-    #define PSP
+#define PSP
 #endif
 
 #if defined(PSP)
     #define PROCYON_PSP
-    #include <pspdebug.h>
 #endif
 
 #if !defined(PROCYON_DEBUG) && !defined(NDEBUG)
@@ -216,12 +215,19 @@ typedef struct papp_texture {
 
     int padded_width;    // Power of two width (PROCYON_PSP only)
     int padded_height;   // Power of two height (PROCYON_PSP only)
+    bool swizzled;       // Swizzle texture reads (PROCYON_PSP only)
+    void *tex_data;
 
     union {
         unsigned int id; // OpenGL texture id (PROCYON_DESKTOP only)
         void *data;      // Texture data (PROCYON_PSP only)
     };
 } papp_texture;
+
+typedef struct papp_render_target {
+    papp_texture texture;
+    void *edram_offset;
+} papp_render_target;
 
 typedef struct papp_mat4
 {
@@ -257,6 +263,11 @@ void papp_draw_texture(papp_texture texture, float x, float y);
 void papp_draw_texture_rect(papp_texture texture, papp_rect source, papp_rect dest);
 void papp_draw_texture_ex(papp_texture texture, papp_rect source, papp_rect dest, papp_vec2 origin, float rotation, papp_color tint);
 
+papp_render_target papp_create_render_target(int width, int height);
+void papp_enable_render_target(papp_render_target *render_target);
+void papp_disable_render_target(void *temp_fb);
+
+unsigned int papp_closest_greater_pow2(const unsigned int value);
 papp_mat4 papp_ortho(float left, float right, float bottom, float top, float near, float far);
 
 #ifdef __cplusplus

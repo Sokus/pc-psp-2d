@@ -1,5 +1,15 @@
 #include "procyon.h"
 
+unsigned int papp_closest_greater_pow2(const unsigned int value)
+{
+    if(value == 0 || value > (1 << 31))
+        return 0;
+    unsigned int poweroftwo = 1;
+    while (poweroftwo < value)
+        poweroftwo <<= 1;
+    return poweroftwo;
+}
+
 papp_mat4 papp_ortho(float left, float right, float bottom, float top, float near, float far)
 {
     papp_mat4 result = {0.0f};

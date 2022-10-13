@@ -24,6 +24,9 @@ void pgfx_start_frame();
 void pgfx_end_frame();
 void pgfx_set_clear_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 void pgfx_clear();
+
+void pgfx_bind_render_target(papp_render_target *render_target);
+void pgfx_unbind_render_target();
 void pgfx_update_viewport(int width, int height);
 
 void pgfx_begin_drawing(int flags);
@@ -36,13 +39,8 @@ void pgfx_batch_color(unsigned char r, unsigned char g, unsigned char b, unsigne
 void pgfx_batch_texcoord(float u, float v);
 
 unsigned int pgfx_psp_get_buffer_size(unsigned int width, unsigned int height, unsigned int pixel_format);
-void *pgfx_psp_static_push(unsigned int size);
-void *pgfx_psp_push_static_buffer(unsigned int width, unsigned int height, unsigned int pixel_format);
-void *pgfx_psp_push_static_vram_texture(unsigned int width, unsigned int height, unsigned int pixel_format);
+void *pgfx_psp_edram_push_size(unsigned int size);
 
 papp_texture pgfx_create_texture(void *data, int width, int height, bool swizzle);
-
-void pgfx_enable_render_target(papp_render_target *render_target);
-void pgfx_disable_render_target();
 
 #endif // PROCYON_GFX_H

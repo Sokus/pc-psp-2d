@@ -21,139 +21,34 @@
 
 #include <math.h>
 
-#ifdef PROCYON_DESKTOP
-
-static papp_texture papp_gl_load_texture(const char *path)
+papp_texture papp_load_texture(const char *path)
 {
     stbi_set_flip_vertically_on_load(0);
     int width, height;
     unsigned char *data = stbi_load(path, &width, &height, 0, 4);
-    if(data)
-    {
-        GLuint texture_id;
-        glGenTextures(1, &texture_id);
-        glBindTexture(GL_TEXTURE_2D, texture_id);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-        stbi_image_free(data);
 
-        papp_texture texture = {0};
-        texture.id = texture_id;
-        texture.width = width;
-        texture.height = height;
-        return texture;
-    }
-    else
-    {
-        fprintf(stderr, "Could not load texture: %s\n", path);
-        papp_texture texture = {0};
-        return texture;
-    }
-}
-
-static papp_render_target papp_gl_create_render_target(int width, int height)
-{
-    unsigned int fbo_id = 0;
-    glGenFramebuffers(1, &fbo_id);
-    // glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-
-    return render_target;
-}
-
-#endif // PROCYON_DESKTOP
-
-#ifdef PROCYON_PSP
-
-static void papp_psp_swizzle_fast(u8 *out, const u8 *in, const unsigned int width, const unsigned int height)
-{
-    unsigned int width_blocks = (width / 16);
-    unsigned int height_blocks = (height / 8);
-
-    unsigned int src_pitch = (width - 16) / 4;
-    unsigned int src_row = width * 8;
-
-    const u8 *ysrc = in;
-    u32 *dst = (u32 *)out;
-
-    for (unsigned int blocky = 0; blocky < height_blocks; ++blocky)
-    {
-        const u8 *xsrc = ysrc;
-        for (unsigned int blockx = 0; blockx < width_blocks; ++blockx)
-        {
-            const u32 *src = (u32 *)xsrc;
-            for (unsigned int j = 0; j < 8; ++j)
-            {
-                *(dst++) = *(src++);
-                *(dst++) = *(src++);
-                *(dst++) = *(src++);
-                *(dst++) = *(src++);
-                src += src_pitch;
-            }
-            xsrc += 16;
-        }
-        ysrc += src_row;
-    }
-}
-
-static void papp_psp_copy_texture_data(void *dest, const void *src, const int pW, const int width, const int height)
-{
-    for (unsigned int y = 0; y < height; y++)
-    {
-        for (unsigned int x = 0; x < width; x++)
-        {
-            ((unsigned int*)dest)[x + y * pW] = ((unsigned int *)src)[x + y * width];
-        }
-    }
-}
-
-static papp_texture papp_psp_load_texture(const char *path)
-{
-    stbi_set_flip_vertically_on_load(0);
     papp_texture texture = {0};
-    int width, height;
-    unsigned char *data = stbi_load(path, &width, &height, 0, 4);
 
     if(data)
     {
-        int padded_width = papp_closest_greater_pow2(width);
-        int padded_height = papp_closest_greater_pow2(height);
-        int size = padded_width * padded_height * 4;
+        #if defined(PROCYON_DESKTOP)
+            GLuint texture_id;
+            glGenTextures(1, &texture_id);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+            stbi_image_free(data);
 
-        unsigned int *data_buffer = memalign(16, size);
-
-        if(data_buffer)
-        {
-            papp_psp_copy_texture_data(data_buffer, data, padded_width, width, height);
-
-            #if 1 // 1 - vram, 0 - ram
-                unsigned int *swizzled_pixels = pgfx_psp_push_static_vram_texture(padded_width, padded_height, GU_PSM_8888);
-            #else
-                unsigned int *swizzled_pixels = memalign(16, size);
-            #endif
-
-            if(swizzled_pixels)
-            {
-                papp_psp_swizzle_fast((u8 *)swizzled_pixels, (const u8 *)data_buffer, padded_width * 4, padded_height);
-
-                texture.tex_data = swizzled_pixels;
-                texture.data = swizzled_pixels;
-                texture.width = width;
-                texture.height = height;
-                texture.padded_width = padded_width;
-                texture.padded_height = padded_height;
-                texture.swizzled = true;
-
-                sceKernelDcacheWritebackInvalidateAll();
-            }
-
-            free(data_buffer);
-        }
-
-        stbi_image_free(data);
+            texture.id = texture_id;
+            texture.width = width;
+            texture.height = height;
+        #elif defined(PROCYON_PSP)
+            texture = pgfx_create_texture(data, width, height, true);
+            stbi_image_free(data);
+        #endif
     }
     else
     {
@@ -161,41 +56,6 @@ static papp_texture papp_psp_load_texture(const char *path)
     }
 
     return texture;
-}
-
-static papp_render_target papp_psp_create_render_target(int width, int height)
-{
-    unsigned int padded_width = papp_closest_greater_pow2(width);
-    unsigned int padded_height = papp_closest_greater_pow2(height);
-
-    unsigned int framebuffer_size = pgfx_psp_get_buffer_size(padded_width, padded_height, GU_PSM_8888);
-    void *edram_offset = pgfx_psp_static_push(framebuffer_size);
-    void *texture_address = sceGeEdramGetAddr() + (int)edram_offset;
-
-    memset(texture_address, 0xFF, framebuffer_size);
-
-    papp_render_target render_target;
-    render_target.texture.tex_data = texture_address;
-    render_target.texture.data = texture_address;
-    render_target.texture.width = width;
-    render_target.texture.height = height;
-    render_target.texture.padded_width = padded_width;
-    render_target.texture.padded_height = padded_height;
-    render_target.texture.swizzled = false;
-    render_target.edram_offset = edram_offset;
-
-    return render_target;
-}
-
-#endif // PROCYON_PSP
-
-papp_texture papp_load_texture(const char *path)
-{
-    #if defined(PROCYON_DESKTOP)
-        return papp_gl_load_texture(path);
-    #elif defined(PROCYON_PSP)
-        return papp_psp_load_texture(path);
-    #endif
 }
 
 void papp_draw_texture(papp_texture texture, float x, float y)
@@ -332,19 +192,18 @@ void papp_draw_texture_ex(papp_texture texture, papp_rect source, papp_rect dest
 
 papp_render_target papp_create_render_target(int width, int height)
 {
+    papp_render_target render_target = {0};
+
     #if defined(PROCYON_DESKTOP)
-        return (papp_render_target){0};
+        unsigned int fbo_id = 0;
+        glGenFramebuffers(1, &fbo_id);
+        // glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+        // TODO
     #elif defined(PROCYON_PSP)
-        return papp_psp_create_render_target(width, height);
+        render_target.texture = pgfx_create_texture(0, width, height, false);
+        render_target.edram_offset = render_target.texture.data - (int)sceGeEdramGetAddr();
     #endif
-}
 
-void papp_enable_render_target(papp_render_target *render_target)
-{
-    pgfx_enable_render_target(render_target);
-}
-
-void papp_disable_render_target(void *temp_fb)
-{
-    pgfx_disable_render_target(temp_fb);
+    return render_target;
 }

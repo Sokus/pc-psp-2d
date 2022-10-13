@@ -5,7 +5,7 @@
     #define PROCYON_DESKTOP
 #endif
 
-#if 0 && !defined(PSP)
+#if 1 && !defined(PSP)
 #define PSP
 #endif
 
@@ -216,7 +216,6 @@ typedef struct papp_texture {
     int padded_width;    // Power of two width (PROCYON_PSP only)
     int padded_height;   // Power of two height (PROCYON_PSP only)
     bool swizzled;       // Swizzle texture reads (PROCYON_PSP only)
-    void *tex_data;
 
     union {
         unsigned int id; // OpenGL texture id (PROCYON_DESKTOP only)
@@ -246,8 +245,7 @@ bool papp_should_close();
 
 void papp_start_frame();
 void papp_end_frame();
-void papp_set_clear_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
-void papp_clear();
+void papp_clear(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 
 bool papp_key_down(papp_key key);
 bool papp_key_pressed(papp_key key);

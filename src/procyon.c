@@ -93,89 +93,6 @@ static void papp_glfw_framebuffer_size_callback(GLFWwindow *window, int width, i
     papp.height = height;
 }
 
-static bool papp_desktop_init(int width, int height, const char *title)
-{
-    glfwSetErrorCallback(papp_glfw_error_callback);
-
-    if(!glfwInit())
-        return false;
-
-    glfwDefaultWindowHints();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    papp.width = width;
-    papp.height = height;
-    papp.title = title != NULL && title[0] != '\0' ? title : " ";
-    papp.glfw.window = glfwCreateWindow(papp.width, papp.height, papp.title, NULL, NULL);
-
-    if(!papp.glfw.window)
-    {
-        glfwTerminate();
-        return false;
-    }
-
-    glfwMakeContextCurrent(papp.glfw.window);
-    glfwSetKeyCallback(papp.glfw.window, papp_glfw_key_callback);
-    glfwSetFramebufferSizeCallback(papp.glfw.window, papp_glfw_framebuffer_size_callback);
-
-    if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        glfwTerminate();
-        return false;
-    }
-
-    glfwSwapInterval(1);
-
-    pgfx_init();
-    pgfx_update_viewport(papp.width, papp.height);
-    return true;
-}
-
-static void papp_desktop_terminate()
-{
-    pgfx_terminate();
-    glfwDestroyWindow(papp.glfw.window);
-    glfwTerminate();
-}
-
-static bool papp_desktop_should_close()
-{
-    papp.should_close = glfwWindowShouldClose(papp.glfw.window);
-    return papp.should_close;
-}
-
-static void papp_desktop_start_frame()
-{
-    pgfx_update_viewport(papp.width, papp.height);
-    pgfx_start_frame();
-}
-
-static void papp_desktop_end_frame()
-{
-    pgfx_end_frame();
-    glfwSwapBuffers(papp.glfw.window);
-
-    memcpy(papp.input.keyboard.key_state_previous, papp.input.keyboard.key_state, sizeof(papp.input.keyboard.key_state));
-    memcpy(papp.input.gamepad.button_state_previous, papp.input.gamepad.button_state, sizeof(papp.input.gamepad.button_state));
-
-    glfwPollEvents();
-
-    for(int jid = GLFW_JOYSTICK_1; jid < GLFW_JOYSTICK_LAST; jid++)
-    {
-        GLFWgamepadstate state;
-        if(!glfwJoystickIsGamepad(jid)) continue;
-        if(!glfwGetGamepadState(jid, &state)) continue;
-
-        for(int button = 0; button < PAPP_BUTTON_COUNT; button++)
-            papp.input.gamepad.button_state[button] = state.buttons[button];
-
-        for(int axis = 0; axis < PAPP_AXIS_COUNT; axis++)
-            papp.input.gamepad.axis_state[axis] = state.axes[axis];
-    }
-}
-
 #endif // PROCYON_DESKTOP
 
 #ifdef PROCYON_PSP
@@ -215,120 +132,162 @@ static float papp_psp_process_axis_value(unsigned char value)
     return result;
 }
 
-static bool papp_psp_init()
-{
-    if(papp_psp_setup_callbacks() < 0)
-        return false;
-
-    sceCtrlSetSamplingCycle(0);
-    sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
-
-    pgfx_init();
-}
-
-static void papp_psp_terminate()
-{
-    pgfx_terminate();
-    sceKernelExitGame();
-}
-
-static bool papp_psp_should_close()
-{
-    return papp.should_close;
-}
-
-static void papp_psp_start_frame()
-{
-    memcpy(papp.input.gamepad.button_state_previous, papp.input.gamepad.button_state, sizeof(papp.input.gamepad.button_state));
-
-    SceCtrlData ctrl_data;
-    sceCtrlReadBufferPositive(&ctrl_data, 1);
-
-    papp.input.gamepad.button_state[PAPP_BUTTON_CROSS] = ctrl_data.Buttons & PSP_CTRL_CROSS;
-    papp.input.gamepad.button_state[PAPP_BUTTON_CIRCLE] = ctrl_data.Buttons & PSP_CTRL_CIRCLE;
-    papp.input.gamepad.button_state[PAPP_BUTTON_SQUARE] = ctrl_data.Buttons & PSP_CTRL_SQUARE;
-    papp.input.gamepad.button_state[PAPP_BUTTON_TRIANGLE] = ctrl_data.Buttons & PSP_CTRL_TRIANGLE;
-    papp.input.gamepad.button_state[PAPP_BUTTON_LEFT_BUMPER] = ctrl_data.Buttons & PSP_CTRL_LTRIGGER;
-    papp.input.gamepad.button_state[PAPP_BUTTON_RIGHT_BUMPER] = ctrl_data.Buttons & PSP_CTRL_RTRIGGER;
-    papp.input.gamepad.button_state[PAPP_BUTTON_BACK] = ctrl_data.Buttons & PSP_CTRL_SELECT;
-    papp.input.gamepad.button_state[PAPP_BUTTON_START] = ctrl_data.Buttons & PSP_CTRL_START;
-    papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_DOWN] = ctrl_data.Buttons & PSP_CTRL_DOWN;
-    papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_LEFT] = ctrl_data.Buttons & PSP_CTRL_LEFT;
-    papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_RIGHT] = ctrl_data.Buttons & PSP_CTRL_RIGHT;
-    papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_UP] = ctrl_data.Buttons & PSP_CTRL_UP;
-
-    papp.input.gamepad.axis_state[PAPP_AXIS_LEFT_X] = papp_psp_process_axis_value(ctrl_data.Lx);
-    papp.input.gamepad.axis_state[PAPP_AXIS_LEFT_Y] = papp_psp_process_axis_value(ctrl_data.Ly);
-
-    pgfx_start_frame();
-}
-
-static void papp_psp_end_frame()
-{
-    pgfx_end_frame();
-}
-
 #endif // PROCYON_PSP
 
 void papp_init(int width, int height, const char *title)
 {
+    papp.title = title != 0 && title[0] != 0 ? title : " ";
+
     #if defined(PROCYON_DESKTOP)
-        papp_desktop_init(width, height, title);
+        glfwSetErrorCallback(papp_glfw_error_callback);
+
+        if(!glfwInit())
+            return;
+
+        glfwDefaultWindowHints();
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+        papp.width = width;
+        papp.height = height;
+
+        papp.glfw.window = glfwCreateWindow(papp.width, papp.height, papp.title, NULL, NULL);
+
+        if(!papp.glfw.window)
+        {
+            glfwTerminate();
+            return;
+        }
+
+        glfwMakeContextCurrent(papp.glfw.window);
+        glfwSetKeyCallback(papp.glfw.window, papp_glfw_key_callback);
+        glfwSetFramebufferSizeCallback(papp.glfw.window, papp_glfw_framebuffer_size_callback);
+
+        if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+        {
+            glfwTerminate();
+            return;
+        }
+
+        glfwSwapInterval(1);
     #elif defined(PROCYON_PSP)
-        papp_psp_init();
+        if(papp_psp_setup_callbacks() < 0)
+            return;
+
+        papp.width = PSP_SCR_W;
+        papp.height = PSP_SCR_H;
+
+        sceCtrlSetSamplingCycle(0);
+        sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
     #endif
+
+    pgfx_init();
+    pgfx_update_viewport(papp.width, papp.height);
 }
 
 void papp_terminate()
 {
+    pgfx_terminate();
+
     #if defined(PROCYON_DESKTOP)
-        papp_desktop_terminate();
+        glfwDestroyWindow(papp.glfw.window);
+        glfwTerminate();
     #elif defined(PROCYON_PSP)
-        papp_psp_terminate();
+        sceKernelExitGame();
     #endif
 }
 
 bool papp_should_close()
 {
     #if defined(PROCYON_DESKTOP)
-        return papp_desktop_should_close();
-    #elif defined(PROCYON_PSP)
-        return papp_psp_should_close();
+        papp.should_close = glfwWindowShouldClose(papp.glfw.window);
     #endif
+
+    return papp.should_close;
 }
 
 void papp_start_frame()
 {
     #if defined(PROCYON_DESKTOP)
-        papp_desktop_start_frame();
+        for(int jid = GLFW_JOYSTICK_1; jid < GLFW_JOYSTICK_LAST; jid++)
+        {
+            GLFWgamepadstate state;
+            if(!glfwJoystickIsGamepad(jid)) continue;
+            if(!glfwGetGamepadState(jid, &state)) continue;
+
+            for(int button = 0; button < PAPP_BUTTON_COUNT; button++)
+                papp.input.gamepad.button_state[button] = state.buttons[button];
+
+            for(int axis = 0; axis < PAPP_AXIS_COUNT; axis++)
+                papp.input.gamepad.axis_state[axis] = state.axes[axis];
+        }
     #elif defined(PROCYON_PSP)
-        papp_psp_start_frame();
+        SceCtrlData ctrl_data;
+        sceCtrlReadBufferPositive(&ctrl_data, 1);
+
+        papp.input.gamepad.button_state[PAPP_BUTTON_CROSS] = ctrl_data.Buttons & PSP_CTRL_CROSS;
+        papp.input.gamepad.button_state[PAPP_BUTTON_CIRCLE] = ctrl_data.Buttons & PSP_CTRL_CIRCLE;
+        papp.input.gamepad.button_state[PAPP_BUTTON_SQUARE] = ctrl_data.Buttons & PSP_CTRL_SQUARE;
+        papp.input.gamepad.button_state[PAPP_BUTTON_TRIANGLE] = ctrl_data.Buttons & PSP_CTRL_TRIANGLE;
+        papp.input.gamepad.button_state[PAPP_BUTTON_LEFT_BUMPER] = ctrl_data.Buttons & PSP_CTRL_LTRIGGER;
+        papp.input.gamepad.button_state[PAPP_BUTTON_RIGHT_BUMPER] = ctrl_data.Buttons & PSP_CTRL_RTRIGGER;
+        papp.input.gamepad.button_state[PAPP_BUTTON_BACK] = ctrl_data.Buttons & PSP_CTRL_SELECT;
+        papp.input.gamepad.button_state[PAPP_BUTTON_START] = ctrl_data.Buttons & PSP_CTRL_START;
+        papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_DOWN] = ctrl_data.Buttons & PSP_CTRL_DOWN;
+        papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_LEFT] = ctrl_data.Buttons & PSP_CTRL_LEFT;
+        papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_RIGHT] = ctrl_data.Buttons & PSP_CTRL_RIGHT;
+        papp.input.gamepad.button_state[PAPP_BUTTON_DPAD_UP] = ctrl_data.Buttons & PSP_CTRL_UP;
+
+        papp.input.gamepad.axis_state[PAPP_AXIS_LEFT_X] = papp_psp_process_axis_value(ctrl_data.Lx);
+        papp.input.gamepad.axis_state[PAPP_AXIS_LEFT_Y] = papp_psp_process_axis_value(ctrl_data.Ly);
     #endif
+
+    pgfx_update_viewport(papp.width, papp.height);
+    pgfx_start_frame();
 }
 
 void papp_end_frame()
 {
+    pgfx_end_frame();
+
+    memcpy(papp.input.gamepad.button_state_previous, papp.input.gamepad.button_state, sizeof(papp.input.gamepad.button_state));
+
     #if defined(PROCYON_DESKTOP)
-        papp_desktop_end_frame();
-    #elif defined(PROCYON_PSP)
-        papp_psp_end_frame();
+        memcpy(papp.input.keyboard.key_state_previous, papp.input.keyboard.key_state, sizeof(papp.input.keyboard.key_state));
+
+        glfwSwapBuffers(papp.glfw.window);
+        glfwPollEvents();
     #endif
 }
 
-void papp_set_clear_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+void papp_clear(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
     pgfx_set_clear_color(r, g, b, a);
+    pgfx_clear();
 }
 
-void papp_clear()
+void papp_enable_render_target(papp_render_target *render_target)
 {
-    pgfx_clear();
+    // finish rendering?
+    pgfx_bind_render_target(render_target);
+    int width = render_target->texture.width;
+    int height = render_target->texture.height;
+    pgfx_update_viewport(width, height);
+}
+
+void papp_disable_render_target(void *temp_fb)
+{
+    // finish rendering?
+    pgfx_unbind_render_target();
+    pgfx_update_viewport(papp.width, papp.height);
+    //pgfx_disable_render_target(temp_fb);
 }
 
 bool papp_key_down(papp_key key)
 {
     bool is_down = false;
-        #if defined(PROCYON_DESKTOP)
+    #if defined(PROCYON_DESKTOP)
         if(key >= 0 && key < PAPP_KEY_COUNT)
             is_down = papp.input.keyboard.key_state[key];
     #endif

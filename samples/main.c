@@ -13,8 +13,7 @@ int main(int argc, char* argv[])
 
         papp_enable_render_target(&render_target);
         {
-            papp_set_clear_color(0, 12, 24, 255);
-            papp_clear();
+            papp_clear(0, 12, 24, 255);
 
             papp_rect source = {0.0f, 0.0f, 8.0f, 8.0f};
             papp_rect destination = {0.0f, 0.0f, 32.0f, 32.0f};
@@ -22,8 +21,7 @@ int main(int argc, char* argv[])
         }
         papp_disable_render_target(0);
 
-        papp_set_clear_color(20, 0, 12, 255);
-        papp_clear();
+        papp_clear(20, 0, 12, 255);
 
         papp_rect source = {0.0f, 0.0f, 64.0f, 64.0f};
         papp_rect destination = {0.0f, 0.0f, 256.0f, 256.0f};

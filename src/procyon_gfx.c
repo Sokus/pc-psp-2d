@@ -278,6 +278,10 @@ static bool pgfx_gl_init()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    pgfx_enable(PGFX_CULL_FACE);
+    glCullFace(GL_BACK);
+    pgfx_front_face(PGFX_CCW);
+
     glBindVertexArray(0);
 
     pgfx.gl.draw_count = 1;
@@ -366,8 +370,9 @@ static bool pgfx_psp_init()
 	sceGuDispBuffer(PSP_SCR_W, PSP_SCR_H, framebuffer1, PSP_BUF_W);
 	sceGuDepthBuffer(depthbuffer, PSP_BUF_W);
 
-	sceGuFrontFace(GU_CCW);
-	sceGuEnable(GU_CULL_FACE);
+    pgfx_enable(PGFX_CULL_FACE);
+    pgfx_front_face(PGFX_CCW);
+
 	sceGuEnable(GU_CLIP_PLANES);
 
 	sceGuEnable(GU_SCISSOR_TEST);
@@ -473,15 +478,23 @@ void pgfx_start_frame()
 
 void pgfx_end_frame()
 {
-    #if defined(PROCYON_DESKTOP)
-        pgfx_gl_render_batch();
-    #elif defined(PROCYON_PSP)
-        pgfx_psp_render_batch();
+    pgfx_render_batch();
+
+    #if defined(PROCYON_PSP)
 
         sceGuFinish();
         sceGuSync(0, 0);
         sceDisplayWaitVblankStart();
         pgfx.psp.current_drawbuffer = sceGuSwapBuffers();
+    #endif
+}
+
+void pgfx_render_batch()
+{
+    #if defined(PROCYON_DESKTOP)
+        pgfx_gl_render_batch();
+    #elif defined(PROCYON_PSP)
+        pgfx_psp_render_batch();
     #endif
 }
 
@@ -507,7 +520,7 @@ void pgfx_clear()
 void pgfx_bind_render_target(papp_render_target *render_target)
 {
     #if defined(PROCYON_DESKTOP)
-
+        glBindFramebuffer(GL_FRAMEBUFFER, render_target->id);
     #elif defined(PROCYON_PSP)
         void *fbp = render_target->edram_offset;
         int fbw = render_target->texture.padded_width;
@@ -518,7 +531,7 @@ void pgfx_bind_render_target(papp_render_target *render_target)
 void pgfx_unbind_render_target()
 {
     #if defined(PROCYON_DESKTOP)
-
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     #elif defined(PROCYON_PSP)
         void *fbp = pgfx.psp.current_drawbuffer;
         int fbw = PSP_BUF_W;
@@ -526,16 +539,23 @@ void pgfx_unbind_render_target()
     #endif
 }
 
-void pgfx_update_viewport(int width, int height)
+void pgfx_ortho(float left, float right, float bottom, float top, float near, float far)
 {
     #if defined(PROCYON_DESKTOP)
-        glViewport(0, 0, width, height);
-        papp_mat4 ortho = papp_ortho(0, (float)width, (float)height, 0.0f, -1.0f, 1.0f);
+        papp_mat4 ortho = papp_ortho(left, right, bottom, top, near, far);
         pgfx_gl_uniform_mat4(pgfx.gl.shader, "projection", *ortho.elements);
     #elif defined(PROCYON_PSP)
         sceGumMatrixMode(GU_PROJECTION);
         sceGumLoadIdentity();
-        sceGumOrtho(0.0f, width, height, 0.0f, -10.0f, 10.0f); // probably out
+        sceGumOrtho(left, right, bottom, top, near, far);
+    #endif
+}
+
+void pgfx_update_viewport(int width, int height)
+{
+    #if defined(PROCYON_DESKTOP)
+        glViewport(0, 0, width, height);
+    #elif defined(PROCYON_PSP)
         sceGuScissor(0, 0, width, height); // probably out
         sceGuOffset(2048 - (width/2), 2048 - (height/2));
         sceGuViewport(2048, 2048, width, height);
@@ -726,7 +746,18 @@ papp_texture pgfx_create_texture(void *data, int width, int height, bool swizzle
     papp_texture texture = {0};
 
     #if defined(PROCYON_DESKTOP)
+        GLuint texture_id;
+        glGenTextures(1, &texture_id);
+        glBindTexture(GL_TEXTURE_2D, texture_id);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 
+        texture.id = texture_id;
+        texture.width = width;
+        texture.height = height;
     #elif defined(PROCYON_PSP)
         int padded_width = papp_closest_greater_pow2(width);
         int padded_height = papp_closest_greater_pow2(height);

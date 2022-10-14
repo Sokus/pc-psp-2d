@@ -184,6 +184,7 @@ void papp_init(int width, int height, const char *title)
 
     pgfx_init();
     pgfx_update_viewport(papp.width, papp.height);
+    pgfx_ortho(0.0f, (float)papp.width, (float)papp.width, 0.0f, -1.0f, 1.0f);
 }
 
 void papp_terminate()
@@ -244,6 +245,7 @@ void papp_start_frame()
     #endif
 
     pgfx_update_viewport(papp.width, papp.height);
+    pgfx_ortho(0.0f, (float)papp.width, (float)papp.width, 0.0f, -1.0f, 1.0f);
     pgfx_start_frame();
 }
 
@@ -269,19 +271,31 @@ void papp_clear(unsigned char r, unsigned char g, unsigned char b, unsigned char
 
 void papp_enable_render_target(papp_render_target *render_target)
 {
-    // finish rendering?
+    pgfx_render_batch();
     pgfx_bind_render_target(render_target);
     int width = render_target->texture.width;
     int height = render_target->texture.height;
     pgfx_update_viewport(width, height);
+
+    #if defined(PROCYON_DESKTOP)
+        pgfx_ortho(0.0f, (float)width, 0.0f, (float)height, -1.0f, 1.0f);
+        pgfx_front_face(PGFX_CW);
+    #elif defined(PROCYON_PSP)
+        pgfx_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f);
+    #endif
+
 }
 
 void papp_disable_render_target(void *temp_fb)
 {
-    // finish rendering?
+    pgfx_render_batch();
     pgfx_unbind_render_target();
     pgfx_update_viewport(papp.width, papp.height);
-    //pgfx_disable_render_target(temp_fb);
+    pgfx_ortho(0.0f, (float)papp.width, (float)papp.height, 0.0f, -1.0f, 1.0f);
+
+    #if defined(PROCYON_DESKTOP)
+        pgfx_front_face(PGFX_CCW);
+    #endif
 }
 
 bool papp_key_down(papp_key key)

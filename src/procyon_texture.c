@@ -31,24 +31,8 @@ papp_texture papp_load_texture(const char *path)
 
     if(data)
     {
-        #if defined(PROCYON_DESKTOP)
-            GLuint texture_id;
-            glGenTextures(1, &texture_id);
-            glBindTexture(GL_TEXTURE_2D, texture_id);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-            stbi_image_free(data);
-
-            texture.id = texture_id;
-            texture.width = width;
-            texture.height = height;
-        #elif defined(PROCYON_PSP)
-            texture = pgfx_create_texture(data, width, height, true);
-            stbi_image_free(data);
-        #endif
+        texture = pgfx_create_texture(data, width, height, true);
+        stbi_image_free(data);
     }
     else
     {
@@ -195,11 +179,12 @@ papp_render_target papp_create_render_target(int width, int height)
     papp_render_target render_target = {0};
 
     #if defined(PROCYON_DESKTOP)
-        unsigned int fbo_id = 0;
-        glGenFramebuffers(1, &fbo_id);
-        // glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
-        // TODO
+        render_target.texture = pgfx_create_texture(0, width, height, false);
+
+        glGenFramebuffers(1, &render_target.id);
+        glBindFramebuffer(GL_FRAMEBUFFER, render_target.id);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, render_target.texture.id, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     #elif defined(PROCYON_PSP)
         render_target.texture = pgfx_create_texture(0, width, height, false);
         render_target.edram_offset = render_target.texture.data - (int)sceGeEdramGetAddr();

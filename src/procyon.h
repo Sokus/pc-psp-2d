@@ -5,7 +5,7 @@
     #define PROCYON_DESKTOP
 #endif
 
-#if 1 && !defined(PSP)
+#if 0 && !defined(PSP)
 #define PSP
 #endif
 
@@ -225,7 +225,11 @@ typedef struct papp_texture {
 
 typedef struct papp_render_target {
     papp_texture texture;
-    void *edram_offset;
+
+    union {
+        unsigned int id;    // OpenGL framebuffer id (PROCYON_DESKTOP only)
+        void *edram_offset; // eDRAM framebuffer offset (PROCYON_PSP only)
+    };
 } papp_render_target;
 
 typedef struct papp_mat4
